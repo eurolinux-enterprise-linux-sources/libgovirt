@@ -1,0 +1,88 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Christophe Fergeau <cfergeau@redhat.com>
+Date: Mon, 27 Jul 2015 19:23:24 +0200
+Subject: [PATCH] proxy: Fix blocking of notify::ssl-ca-file in
+ ::set_tmp_ca_file()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+OvirtProxy listens for OvirtProxy::ssl-ca-file changes so that it can
+clear the temp file it uses for it when it's externally changed.
+However, when changing it internally from ovirt_proxy_set_tmp_ca_file,
+we need to block that handler because it would clear the value we just
+set.
+
+This uses g_signal_handler_{un,}block which has this note in its
+documentation:
+« since the order in which handlers are called during signal emissions
+is deterministic, whether the unblocked handler in question is called as
+part of a currently ongoing emission depends on how far that emission
+has proceeded yet »
+
+This actually causes an issue when using
+g_object_set(proxy, "ca-cert", ca, NULL); as the block/unblock will not
+be enough to prevent our handler listening for changes for being called,
+resulting in the temp file we just set to be removed behind our back.
+
+Another issue with the blocking is that libgovirt users who want to listen
+for RestProxy::ssl-ca-file changing would not be able to do so.
+
+This commit takes another approach to avoid ssl_ca_file_changed() firing
+when we don't want it to, it sets a gboolean to TRUE before setting
+RestProxy::ssl-ca-file. This boolean is tested in ssl_ca_file_changed() before
+doing anything. If it's set, ssl_ca_file_changed() only clears it and returns.
+---
+ govirt/ovirt-proxy-private.h |  1 +
+ govirt/ovirt-proxy.c         | 18 ++++++++++++------
+ 2 files changed, 13 insertions(+), 6 deletions(-)
+
+diff --git a/govirt/ovirt-proxy-private.h b/govirt/ovirt-proxy-private.h
+index b9cc153..06fe419 100644
+--- a/govirt/ovirt-proxy-private.h
++++ b/govirt/ovirt-proxy-private.h
+@@ -39,6 +39,7 @@ struct _OvirtProxyPrivate {
+     char *jsessionid;
+     SoupCookieJar *cookie_jar;
+ 
++    gboolean setting_ca_file;
+     gulong ssl_ca_file_changed_id;
+ };
+ 
+diff --git a/govirt/ovirt-proxy.c b/govirt/ovirt-proxy.c
+index ef97c9b..5615f16 100644
+--- a/govirt/ovirt-proxy.c
++++ b/govirt/ovirt-proxy.c
+@@ -439,13 +439,14 @@ static void ovirt_proxy_set_tmp_ca_file(OvirtProxy *proxy, const char *ca_file)
+     }
+     proxy->priv->tmp_ca_file = g_strdup(ca_file);
+     if (ca_file != NULL) {
+-        /* Not blocking this signal would cause the callback to call again
+-         * set_tmp_ca_file with a NULL ca_file, undoing the work we just did */
+-        g_signal_handler_block(G_OBJECT(proxy),
+-                               proxy->priv->ssl_ca_file_changed_id);
++        /* We block invokations of ssl_ca_file_changed() using the 'setting_ca_file' boolean
++         * g_signal_handler_{un,}block is not working well enough as
++         * ovirt_proxy_set_tmp_ca_file() can be called as part of a g_object_set call,
++         * and unblocking "notify::ssl-ca-file" right after setting its value
++         * is not enough to prevent ssl_ca_file_changed() from running.
++         */
++        proxy->priv->setting_ca_file = TRUE;
+         g_object_set(G_OBJECT(proxy), "ssl-ca-file", ca_file, NULL);
+-        g_signal_handler_unblock(G_OBJECT(proxy),
+-                                 proxy->priv->ssl_ca_file_changed_id);
+     }
+ }
+ 
+@@ -832,6 +833,11 @@ static void ssl_ca_file_changed(GObject *gobject,
+                                 GParamSpec *pspec,
+                                 gpointer user_data)
+ {
++    OvirtProxy *proxy = OVIRT_PROXY(gobject);
++    if (proxy->priv->setting_ca_file) {
++        proxy->priv->setting_ca_file = FALSE;
++        return;
++    }
+     ovirt_proxy_set_tmp_ca_file(OVIRT_PROXY(gobject), NULL);
+ }
+ 

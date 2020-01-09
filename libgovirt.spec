@@ -9,7 +9,7 @@
 Summary: A GObject library for interacting with oVirt REST API
 Name: libgovirt
 Version: 0.3.2
-Release: 2%{?dist}%{?extra_release}
+Release: 3%{?dist}%{?extra_release}
 License: LGPLv2+
 Group: Development/Libraries
 Source: http://ftp.gnome.org/pub/GNOME/sources/libgovirt/0.3/%{name}-%{version}.tar.xz
@@ -21,6 +21,10 @@ Patch4: 0005-proxy-Fix-bug-in-cancelled-disconnection-after-async.patch
 Patch5: 0006-collection-unref-the-resource-instead-of-the-resourc.patch
 Patch6: 0007-vm-Don-t-print-ticket-value-to-stdout.patch
 Patch7: 0008-Add-OvirtVmDisplay-proxy-url.patch
+Patch8: 0009-proxy-Fix-blocking-of-notify-ssl-ca-file-in-set_tmp_.patch
+Patch9: 0010-utils-Add-ovirt_rest_xml_node_get_content_from_path.patch
+Patch10: 0011-storage-domain-Parse-storage-domain-status.patch
+Patch11: 0012-storage-domain-Remove-debug-log-on-missing-node.patch
 URL: http://people.freedesktop.org/~teuf/govirt/
 BuildRequires: glib2-devel
 BuildRequires: intltool
@@ -59,6 +63,10 @@ Libraries, includes, etc. to compile with the libgovirt library
 %patch5 -p1
 %patch6 -p1
 %patch7 -p1
+%patch8 -p1
+%patch9 -p1
+%patch10 -p1
+%patch11 -p1
 
 %build
 %if %{with_gir}
@@ -101,6 +109,14 @@ make check
 %endif
 
 %changelog
+* Tue Jul 26 2016 Christophe Fergeau <cfergeau@redhat.com> 0.3.2-3
+- Fix bug when setting the CA used for https REST communication
+  Resolves: rhbz#1325762
+- Fix parsing of state of storage domain nodes
+  Resolves: rhbz#1318672
+- Silence one redundant warning happening during storage domain parsing
+  Related: rhbz#1201846
+
 * Thu Dec 17 2015 Christophe Fergeau <cfergeau@redhat.com> 0.3.2-2
 - Silence unnecessary warning
   Resolves: rhbz#1201846
