@@ -9,11 +9,13 @@
 Summary: A GObject library for interacting with oVirt REST API
 Name: libgovirt
 Version: 0.3.2
-Release: 1%{?dist}%{?extra_release}
+Release: 1%{?dist}.2%{?extra_release}
 License: LGPLv2+
 Group: Development/Libraries
 Source: http://ftp.gnome.org/pub/GNOME/sources/libgovirt/0.3/%{name}-%{version}.tar.xz
 Patch0: 0001-Add-fallback-for-G_DEPRECATED_FOR-in-older-glib.patch
+Patch1: 0002-collection-unref-the-resource-instead-of-the-resourc.patch
+Patch2: 0003-Access-oVirt-API-through-ovirt-engine-api-rather-tha.patch
 URL: http://people.freedesktop.org/~teuf/govirt/
 BuildRequires: glib2-devel
 BuildRequires: intltool
@@ -45,6 +47,8 @@ Libraries, includes, etc. to compile with the libgovirt library
 %prep
 %setup -q
 %patch0 -p1
+%patch1 -p1
+%patch2 -p1
 
 %build
 %if %{with_gir}
@@ -87,6 +91,15 @@ make check
 %endif
 
 %changelog
+* Tue Jan 12 2016 Christophe Fergeau <cfergeau@redhat.com> 0.3.2-1.2
+- Access oVirt API through /ovirt-engine/api rather than /api, this fixes
+  foreign menu when accessing a VM from .vv files
+  Resolves: rhbz#1297810
+
+* Fri Jan 08 2016 Fabiano Fidêncio <fidencio@redhat.com> 0.3.2-1.1
+- Fix crash when VM has several ISO domains
+  Resolves: rhbz#1296683
+
 * Tue Jan 20 2015 Christophe Fergeau <cfergeau@redhat.com> 0.3.2-1
 - Update to libgovirt 0.3.2
   Related: rhbz#981678
