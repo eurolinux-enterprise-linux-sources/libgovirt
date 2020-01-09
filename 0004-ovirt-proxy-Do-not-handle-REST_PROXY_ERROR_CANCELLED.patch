@@ -1,0 +1,67 @@
+From 0926014c956d45142225bca74bdaa42ecf760763 Mon Sep 17 00:00:00 2001
+From: Pavel Grunt <pgrunt@redhat.com>
+Date: Fri, 20 Mar 2015 15:04:48 +0100
+Subject: [PATCH] ovirt-proxy: Do not handle REST_PROXY_ERROR_CANCELLED as
+ error
+
+Do not warn in that case, set OVIRT_REST_CALL_ERROR_CANCELLED instead.
+
+(cherry picked from commit 38ae6b7ebd7a8c531bfd973fb7931e34ac5af2cd)
+
+Resolves: rhbz#1201604
+---
+ govirt/ovirt-proxy.c           | 14 +++++++++++---
+ govirt/ovirt-rest-call-error.h |  3 ++-
+ 2 files changed, 13 insertions(+), 4 deletions(-)
+
+diff --git a/govirt/ovirt-proxy.c b/govirt/ovirt-proxy.c
+index a5877ff..25ed019 100644
+--- a/govirt/ovirt-proxy.c
++++ b/govirt/ovirt-proxy.c
+@@ -24,6 +24,7 @@
+ #include <config.h>
+ 
+ #include "ovirt-error.h"
++#include "ovirt-rest-call-error.h"
+ #include "ovirt-proxy.h"
+ #include "ovirt-proxy-private.h"
+ #include "ovirt-rest-call.h"
+@@ -166,14 +167,21 @@ RestXmlNode *ovirt_proxy_get_collection_xml(OvirtProxy *proxy,
+ {
+     RestProxyCall *call;
+     RestXmlNode *root;
++    GError *err = NULL;
+ 
+     g_return_val_if_fail(OVIRT_IS_PROXY(proxy), NULL);
+ 
+     call = ovirt_rest_call_new(proxy, "GET", href);
+ 
+-    if (!rest_proxy_call_sync(call, error)) {
+-        if ((error != NULL) && (*error != NULL)) {
+-            g_warning("Error while getting collection: %s", (*error)->message);
++    if (!rest_proxy_call_sync(call, &err)) {
++        if (g_error_matches(err, REST_PROXY_ERROR, REST_PROXY_ERROR_CANCELLED)) {
++            g_set_error_literal(error,
++                                OVIRT_REST_CALL_ERROR, OVIRT_REST_CALL_ERROR_CANCELLED,
++                                err->message);
++            g_clear_error(&err);
++        } else if (err != NULL) {
++            g_warning("Error while getting collection: %s", err->message);
++            g_propagate_error(error, err);
+         } else {
+             g_warning("Error while getting collection");
+         }
+diff --git a/govirt/ovirt-rest-call-error.h b/govirt/ovirt-rest-call-error.h
+index 724f01a..3186ecf 100644
+--- a/govirt/ovirt-rest-call-error.h
++++ b/govirt/ovirt-rest-call-error.h
+@@ -25,7 +25,8 @@
+ G_BEGIN_DECLS
+ 
+ typedef enum {
+-    OVIRT_REST_CALL_ERROR_XML
++    OVIRT_REST_CALL_ERROR_XML,
++    OVIRT_REST_CALL_ERROR_CANCELLED,
+ } OvirtRestCallError;
+ 
+ #define OVIRT_REST_CALL_ERROR ovirt_rest_call_error_quark()

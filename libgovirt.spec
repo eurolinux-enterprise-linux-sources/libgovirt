@@ -9,13 +9,18 @@
 Summary: A GObject library for interacting with oVirt REST API
 Name: libgovirt
 Version: 0.3.2
-Release: 1%{?dist}.2%{?extra_release}
+Release: 2%{?dist}%{?extra_release}
 License: LGPLv2+
 Group: Development/Libraries
 Source: http://ftp.gnome.org/pub/GNOME/sources/libgovirt/0.3/%{name}-%{version}.tar.xz
 Patch0: 0001-Add-fallback-for-G_DEPRECATED_FOR-in-older-glib.patch
-Patch1: 0002-collection-unref-the-resource-instead-of-the-resourc.patch
+Patch1: 0002-storage-domain-Silence-warning-during-XML-parsing.patch
 Patch2: 0003-Access-oVirt-API-through-ovirt-engine-api-rather-tha.patch
+Patch3: 0004-ovirt-proxy-Do-not-handle-REST_PROXY_ERROR_CANCELLED.patch
+Patch4: 0005-proxy-Fix-bug-in-cancelled-disconnection-after-async.patch
+Patch5: 0006-collection-unref-the-resource-instead-of-the-resourc.patch
+Patch6: 0007-vm-Don-t-print-ticket-value-to-stdout.patch
+Patch7: 0008-Add-OvirtVmDisplay-proxy-url.patch
 URL: http://people.freedesktop.org/~teuf/govirt/
 BuildRequires: glib2-devel
 BuildRequires: intltool
@@ -49,6 +54,11 @@ Libraries, includes, etc. to compile with the libgovirt library
 %patch0 -p1
 %patch1 -p1
 %patch2 -p1
+%patch3 -p1
+%patch4 -p1
+%patch5 -p1
+%patch6 -p1
+%patch7 -p1
 
 %build
 %if %{with_gir}
@@ -91,14 +101,21 @@ make check
 %endif
 
 %changelog
-* Tue Jan 12 2016 Christophe Fergeau <cfergeau@redhat.com> 0.3.2-1.2
-- Access oVirt API through /ovirt-engine/api rather than /api, this fixes
-  foreign menu when accessing a VM from .vv files
-  Resolves: rhbz#1297810
-
-* Fri Jan 08 2016 Fabiano Fidêncio <fidencio@redhat.com> 0.3.2-1.1
+* Thu Dec 17 2015 Christophe Fergeau <cfergeau@redhat.com> 0.3.2-2
+- Silence unnecessary warning
+  Resolves: rhbz#1201846
+- Access oVirt REST API through /ovirt-engine/api rather than /api
+  Resolves: rhbz#1277447
+- Allow to cancel ovirt:// authentication dialog in virt-viewer
+  Resolves: rhbz#1201604
+- Make sure 'cancelled' signal is disconnected when objects die
+  Related: rhbz#1201604
 - Fix crash when VM has several ISO domains
-  Resolves: rhbz#1296683
+  Resolves: rhbz#1274355
+- Don't print ticket value to stdout
+  Resolves: rhbz#1216118
+- Add support for accessing VMs behind proxies
+  Resolves: rhbz#1292754
 
 * Tue Jan 20 2015 Christophe Fergeau <cfergeau@redhat.com> 0.3.2-1
 - Update to libgovirt 0.3.2
@@ -137,5 +154,3 @@ make check
 
 * Wed Feb 20 2013 Christophe Fergeau <cfergeau@redhat.com> 0.0.3-1
 - Initial import of libgovirt 0.0.3
-
-

@@ -1,0 +1,29 @@
+From 0e9cd8e4a27bca71d7d93b63ca2f3b9e8f8369e0 Mon Sep 17 00:00:00 2001
+From: Christophe Fergeau <cfergeau@redhat.com>
+Date: Tue, 8 Dec 2015 10:32:46 +0100
+Subject: [PATCH] vm: Don't print ticket value to stdout
+
+When G_MESSAGES_DEBUG=libgovirt is set, the ticket value would be
+printed to stdout. Since it's a short-lived password used to access the
+VM display, it's better not to print it.
+
+(cherry picked from commit 4e2b071c2568328f760b76cf52a3c614158a3c37)
+
+Resolves: rhbz#1216118
+---
+ govirt/ovirt-vm.c | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/govirt/ovirt-vm.c b/govirt/ovirt-vm.c
+index 04b8089..9a07c2f 100644
+--- a/govirt/ovirt-vm.c
++++ b/govirt/ovirt-vm.c
+@@ -276,8 +276,6 @@ static gboolean parse_ticket_status(RestXmlNode *root, OvirtResource *resource,
+     g_return_val_if_fail(display != NULL, FALSE);
+     g_object_set(G_OBJECT(display), "ticket", node->content, NULL);
+ 
+-    g_debug("Ticket: %s\n", node->content);
+-
+     node = g_hash_table_lookup(root->children, expiry_key);
+     if (node == NULL) {
+         g_set_error(error, OVIRT_ERROR, OVIRT_ERROR_PARSING_FAILED,

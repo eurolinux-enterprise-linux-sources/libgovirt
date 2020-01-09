@@ -1,0 +1,31 @@
+From dc17695ca95da66ecaa6bfad61fb4c62f4cdd4e3 Mon Sep 17 00:00:00 2001
+From: Christophe Fergeau <cfergeau@redhat.com>
+Date: Thu, 12 Mar 2015 12:57:13 +0100
+Subject: [PATCH] storage-domain: Silence warning during XML parsing
+
+Currently, the storage domain XML parser emits a warning when it can't
+find one of the elements it's looking for. However, all of these are
+marked as optional in the corresponding XML schema, so printing a
+runtime warning about that is wrong. This commit switches it from
+g_warning() to g_debug().
+
+(cherry picked from commit fb2bc505022aa82a80cd7d714c04d6cc398b6115)
+
+Resolves: rhbz#1201846
+---
+ govirt/ovirt-storage-domain.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/govirt/ovirt-storage-domain.c b/govirt/ovirt-storage-domain.c
+index bf8000f..15bb22a 100644
+--- a/govirt/ovirt-storage-domain.c
++++ b/govirt/ovirt-storage-domain.c
+@@ -297,7 +297,7 @@ ovirt_resource_parse_xml(OvirtResource *resource,
+ 
+         value_str = ovirt_rest_xml_node_get_content(node, elements->xml_node, NULL);
+         if (value_str == NULL) {
+-            g_warning("could not find node %s", elements->xml_node);
++            g_debug("Could not find node %s", elements->xml_node);
+             continue;
+         }
+         g_value_init(&value, elements->type);

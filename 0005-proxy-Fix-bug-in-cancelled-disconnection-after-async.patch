@@ -1,0 +1,34 @@
+From d4d64029b80496c21c126b76721a61f3213b449b Mon Sep 17 00:00:00 2001
+From: Christophe Fergeau <cfergeau@redhat.com>
+Date: Mon, 3 Aug 2015 14:23:28 +0200
+Subject: [PATCH] proxy: Fix bug in 'cancelled' disconnection after async calls
+
+9aa3aec8 added disconnection of the 'cancelled' signal on the
+cancellable in async calls once the async call has completed to prevent
+a crash. However, there was a bug in this patch as we only disconnect
+from 'cancelled' if data->cancellable is not NULL, and there was one
+code path where setting data->cancellable was forgotten.
+A few refactorings later, the buggy codepath is the only one which
+remains, so the bug fixed in 9aa3aec8 is back...
+
+This commit makes sure data->cancellable is set when needed.
+
+(cherry picked from commit 29d9e36c4cace254540c7f9a523bd1c92f79974c)
+
+Related: rhbz#1201604
+---
+ govirt/ovirt-proxy.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/govirt/ovirt-proxy.c b/govirt/ovirt-proxy.c
+index 25ed019..ef97c9b 100644
+--- a/govirt/ovirt-proxy.c
++++ b/govirt/ovirt-proxy.c
+@@ -283,6 +283,7 @@ void ovirt_rest_call_async(OvirtRestCall *call,
+     data->call_user_data = user_data;
+     data->destroy_call_data = destroy_func;
+     if (cancellable != NULL) {
++        data->cancellable = cancellable;
+         data->cancellable_cb_id = g_cancellable_connect(cancellable,
+                                                         G_CALLBACK (call_async_cancelled_cb),
+                                                         call, NULL);

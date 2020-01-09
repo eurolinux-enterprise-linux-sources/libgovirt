@@ -1,4 +1,4 @@
-From b4fd6a8064819e090d3edea0ef50cbd5997e6cef Mon Sep 17 00:00:00 2001
+From b29a5cab3b786219144746de12dfc47ac6ed5684 Mon Sep 17 00:00:00 2001
 From: Christophe Fergeau <cfergeau@redhat.com>
 Date: Tue, 7 Apr 2015 18:02:14 +0200
 Subject: [PATCH] Access oVirt API through /ovirt-engine/api rather than /api
