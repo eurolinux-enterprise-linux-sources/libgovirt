@@ -9,7 +9,7 @@
 Summary: A GObject library for interacting with oVirt REST API
 Name: libgovirt
 Version: 0.3.3
-Release: 4%{?dist}%{?extra_release}
+Release: 5%{?dist}%{?extra_release}
 License: LGPLv2+
 Group: Development/Libraries
 Source: http://ftp.gnome.org/pub/GNOME/sources/libgovirt/0.3/%{name}-%{version}.tar.xz
@@ -22,6 +22,10 @@ Patch0005: 0005-proxy-Remove-jsessionid-cookie-when-its-value-is-NUL.patch
 Patch0006: 0006-proxy-Only-set-Prefer-persistent-auth-with-jsession-.patch
 Patch0007: 0007-proxy-Fix-persistent-session-with-oVirt-3.6.patch
 Patch0008: 0008-Force-use-of-v3-REST-API.patch
+Patch0009: 0009-New-storage-format-added-in-oVirt-4.1.patch
+Patch0010: 0010-proxy-Fix-bug-in-cancelled-disconnection-after-async.patch
+Patch0011: 0011-proxy-Hold-reference-to-cancellable-object.patch
+Patch0012: 0012-proxy-Check-if-operation-is-cancelled-before-disconn.patch
 
 BuildRequires: glib2-devel
 BuildRequires: intltool
@@ -93,6 +97,12 @@ make check
 %endif
 
 %changelog
+* Mon Mar 13 2017 Eduardo Lima (Etrunko) <etrunko@redhat.com> - 0.3.3-5
+- New storage format added in oVirt 4.1
+  Resolves: rhbz#1346215
+- Check if operation was cancelled before disconnecting signal
+  Resolves: rhbz#1431275
+
 * Fri Jul 01 2016 Christophe Fergeau <cfergeau@redhat.com> - 0.3.3-4
 - Add upstream patch forcing use of the older v3 REST API as we don't support
   yet the v4 API
