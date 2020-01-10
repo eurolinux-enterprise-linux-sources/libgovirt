@@ -1,0 +1,206 @@
+From 55716bb1ab96b59cac35e7345e0ab7adf5d2c037 Mon Sep 17 00:00:00 2001
+From: "Eduardo Lima (Etrunko)" <etrunko@redhat.com>
+Date: Thu, 18 May 2017 16:45:37 -0300
+Subject: [PATCH] Introduce auxiliary function
+ ovirt_sub_collection_new_from_resource()
+
+This function eliminates duplication of code used to create a
+subcollection from a resource. Users are updated accordingly.
+
+Signed-off-by: Eduardo Lima (Etrunko) <etrunko@redhat.com>
+---
+ govirt/ovirt-api.c                | 50 ++++++++++++++-------------------------
+ govirt/ovirt-collection-private.h |  5 ++++
+ govirt/ovirt-collection.c         | 15 ++++++++++++
+ govirt/ovirt-storage-domain.c     | 18 +++++---------
+ govirt/ovirt-vm.c                 | 18 +++++---------
+ 5 files changed, 50 insertions(+), 56 deletions(-)
+
+diff --git a/govirt/ovirt-api.c b/govirt/ovirt-api.c
+index 0ff10ac..b6c1d26 100644
+--- a/govirt/ovirt-api.c
++++ b/govirt/ovirt-api.c
+@@ -119,18 +119,14 @@ OvirtApi *ovirt_api_new(void)
+  */
+ OvirtCollection *ovirt_api_get_vms(OvirtApi *api)
+ {
+-    const char *href;
+-
+     g_return_val_if_fail(OVIRT_IS_API(api), NULL);
+ 
+-    if (api->priv->vms != NULL)
+-        return api->priv->vms;
+-
+-    href = ovirt_resource_get_sub_collection(OVIRT_RESOURCE(api), "vms");
+-    if (href == NULL)
+-        return NULL;
+-
+-    api->priv->vms = ovirt_collection_new(href, "vms", OVIRT_TYPE_VM, "vm");
++    if (api->priv->vms == NULL)
++        api->priv->vms = ovirt_sub_collection_new_from_resource(OVIRT_RESOURCE(api),
++                                                                "vms",
++                                                                "vms",
++                                                                OVIRT_TYPE_VM,
++                                                                "vm");
+ 
+     return api->priv->vms;
+ }
+@@ -143,18 +139,14 @@ OvirtCollection *ovirt_api_get_vms(OvirtApi *api)
+  */
+ OvirtCollection *ovirt_api_get_vm_pools(OvirtApi *api)
+ {
+-    const char *href;
+-
+     g_return_val_if_fail(OVIRT_IS_API(api), NULL);
+ 
+-    if (api->priv->vm_pools != NULL)
+-        return api->priv->vm_pools;
+-
+-    href = ovirt_resource_get_sub_collection(OVIRT_RESOURCE(api), "vmpools");
+-    if (href == NULL)
+-        return NULL;
+-
+-    api->priv->vm_pools = ovirt_collection_new(href, "vmpools", OVIRT_TYPE_VM_POOL, "vmpool");
++    if (api->priv->vm_pools == NULL)
++        api->priv->vm_pools = ovirt_sub_collection_new_from_resource(OVIRT_RESOURCE(api),
++                                                                     "vmpools",
++                                                                     "vmpools",
++                                                                     OVIRT_TYPE_VM_POOL,
++                                                                     "vmpool");
+ 
+     return api->priv->vm_pools;
+ }
+@@ -168,20 +160,14 @@ OvirtCollection *ovirt_api_get_vm_pools(OvirtApi *api)
+  */
+ OvirtCollection *ovirt_api_get_storage_domains(OvirtApi *api)
+ {
+-    const char *href;
+-
+     g_return_val_if_fail(OVIRT_IS_API(api), NULL);
+ 
+-    if (api->priv->storage_domains != NULL)
+-        return api->priv->storage_domains;
+-
+-    href = ovirt_resource_get_sub_collection(OVIRT_RESOURCE(api), "storagedomains");
+-    if (href == NULL)
+-        return NULL;
+-
+-    api->priv->storage_domains = ovirt_collection_new(href, "storage_domains",
+-                                                      OVIRT_TYPE_STORAGE_DOMAIN,
+-                                                      "storage_domain");
++    if (api->priv->storage_domains == NULL)
++        api->priv->storage_domains = ovirt_sub_collection_new_from_resource(OVIRT_RESOURCE(api),
++                                                                            "storagedomains",
++                                                                            "storage_domains",
++                                                                            OVIRT_TYPE_STORAGE_DOMAIN,
++                                                                            "storage_domain");
+ 
+     return api->priv->storage_domains;
+ }
+diff --git a/govirt/ovirt-collection-private.h b/govirt/ovirt-collection-private.h
+index 5bc294f..d955fc6 100644
+--- a/govirt/ovirt-collection-private.h
++++ b/govirt/ovirt-collection-private.h
+@@ -41,6 +41,11 @@ OvirtCollection *ovirt_collection_new_from_xml(RestXmlNode *root_node,
+                                                GType resource_type,
+                                                const char *resource_name,
+                                                GError **error);
++OvirtCollection *ovirt_sub_collection_new_from_resource(OvirtResource *resource,
++                                                        const char *href,
++                                                        const char *collection_name,
++                                                        GType resource_type,
++                                                        const char *resource_name);
+ 
+ G_END_DECLS
+ 
+diff --git a/govirt/ovirt-collection.c b/govirt/ovirt-collection.c
+index 9f15163..3818bbd 100644
+--- a/govirt/ovirt-collection.c
++++ b/govirt/ovirt-collection.c
+@@ -324,6 +324,21 @@ OvirtCollection *ovirt_collection_new_from_xml(RestXmlNode *root_node,
+ }
+ 
+ 
++OvirtCollection *ovirt_sub_collection_new_from_resource(OvirtResource *resource,
++                                                        const char *href,
++                                                        const char *collection_name,
++                                                        GType resource_type,
++                                                        const char *resource_name)
++{
++    const char *link = ovirt_resource_get_sub_collection(resource, href);
++
++    if (link == NULL)
++        return NULL;
++
++    return ovirt_collection_new(link, collection_name, resource_type, resource_name);
++}
++
++
+ /**
+  * ovirt_collection_fetch:
+  * @collection: a #OvirtCollection
+diff --git a/govirt/ovirt-storage-domain.c b/govirt/ovirt-storage-domain.c
+index 0582203..38c4a62 100644
+--- a/govirt/ovirt-storage-domain.c
++++ b/govirt/ovirt-storage-domain.c
+@@ -317,20 +317,14 @@ OvirtStorageDomain *ovirt_storage_domain_new(void)
+  */
+ OvirtCollection *ovirt_storage_domain_get_files(OvirtStorageDomain *domain)
+ {
+-    const char *href;
+-
+     g_return_val_if_fail(OVIRT_IS_STORAGE_DOMAIN(domain), NULL);
+ 
+-    if (domain->priv->files != NULL)
+-        return domain->priv->files;
+-
+-    href = ovirt_resource_get_sub_collection(OVIRT_RESOURCE(domain), "files");
+-    if (href == NULL)
+-        return NULL;
+-
+-    domain->priv->files = ovirt_collection_new(href, "files",
+-                                               OVIRT_TYPE_RESOURCE,
+-                                               "file");
++    if (domain->priv->files == NULL)
++        domain->priv->files = ovirt_sub_collection_new_from_resource(OVIRT_RESOURCE(domain),
++                                                                     "files",
++                                                                     "files",
++                                                                     OVIRT_TYPE_RESOURCE,
++                                                                     "file");
+ 
+     return domain->priv->files;
+ }
+diff --git a/govirt/ovirt-vm.c b/govirt/ovirt-vm.c
+index 04b8089..18c7672 100644
+--- a/govirt/ovirt-vm.c
++++ b/govirt/ovirt-vm.c
+@@ -331,20 +331,14 @@ gboolean ovirt_vm_refresh_finish(OvirtVm *vm,
+  */
+ OvirtCollection *ovirt_vm_get_cdroms(OvirtVm *vm)
+ {
+-    const char *href;
+-
+     g_return_val_if_fail(OVIRT_IS_VM(vm), NULL);
+ 
+-    if (vm->priv->cdroms != NULL)
+-        return vm->priv->cdroms;
+-
+-    href = ovirt_resource_get_sub_collection(OVIRT_RESOURCE(vm), "cdroms");
+-    if (href == NULL)
+-        return NULL;
+-
+-    vm->priv->cdroms =  ovirt_collection_new(href, "cdroms",
+-                                             OVIRT_TYPE_CDROM,
+-                                             "cdrom");
++    if (vm->priv->cdroms == NULL)
++        vm->priv->cdroms = ovirt_sub_collection_new_from_resource(OVIRT_RESOURCE(vm),
++                                                                  "cdroms",
++                                                                  "cdroms",
++                                                                  OVIRT_TYPE_CDROM,
++                                                                  "cdrom");
+ 
+     return vm->priv->cdroms;
+ }
+-- 
+2.13.6
+

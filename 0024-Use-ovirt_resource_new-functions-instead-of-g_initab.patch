@@ -1,0 +1,149 @@
+From af717554a2a022a0ef75572d45b1f5f224a698e1 Mon Sep 17 00:00:00 2001
+From: "Eduardo Lima (Etrunko)" <etrunko@redhat.com>
+Date: Thu, 13 Jul 2017 16:58:28 -0300
+Subject: [PATCH] Use ovirt_resource_new* functions instead of g_initable_new
+
+This patch also fix some functions that were supposed to be tagged as
+G_GNUC_INTERNAL.
+
+Signed-off-by: Eduardo Lima (Etrunko) <etrunko@redhat.com>
+---
+ govirt/ovirt-api.c            |  8 +++++---
+ govirt/ovirt-collection.c     |  4 +---
+ govirt/ovirt-storage-domain.c | 11 ++---------
+ govirt/ovirt-utils.c          |  3 ++-
+ govirt/ovirt-vm-pool.c        |  3 ++-
+ govirt/ovirt-vm.c             |  8 +++++---
+ 6 files changed, 17 insertions(+), 20 deletions(-)
+
+diff --git a/govirt/ovirt-api.c b/govirt/ovirt-api.c
+index bc2bf36..d54c886 100644
+--- a/govirt/ovirt-api.c
++++ b/govirt/ovirt-api.c
+@@ -98,16 +98,18 @@ static void ovirt_api_init(G_GNUC_UNUSED OvirtApi *api)
+     api->priv = OVIRT_API_GET_PRIVATE(api);
+ }
+ 
++G_GNUC_INTERNAL
+ OvirtApi *ovirt_api_new_from_xml(RestXmlNode *node, GError **error)
+ {
+-    return OVIRT_API(g_initable_new(OVIRT_TYPE_API, NULL, error,
+-                                   "xml-node", node, NULL));
++    OvirtResource *api = ovirt_resource_new_from_xml(OVIRT_TYPE_API, node, error);
++    return OVIRT_API(api);
+ }
+ 
+ 
+ OvirtApi *ovirt_api_new(void)
+ {
+-    return OVIRT_API(g_initable_new(OVIRT_TYPE_API, NULL, NULL, NULL));
++    OvirtResource *api = ovirt_resource_new(OVIRT_TYPE_API);
++    return OVIRT_API(api);
+ }
+ 
+ 
+diff --git a/govirt/ovirt-collection.c b/govirt/ovirt-collection.c
+index ff9c27f..ff45313 100644
+--- a/govirt/ovirt-collection.c
++++ b/govirt/ovirt-collection.c
+@@ -216,9 +216,7 @@ ovirt_collection_new_resource_from_xml(OvirtCollection *collection,
+                                        RestXmlNode *node,
+                                        GError **error)
+ {
+-    return OVIRT_RESOURCE(g_initable_new(collection->priv->resource_type,
+-                                         NULL, error,
+-                                         "xml-node", node , NULL));
++    return ovirt_resource_new_from_xml(collection->priv->resource_type, node, error);
+ }
+ 
+ 
+diff --git a/govirt/ovirt-storage-domain.c b/govirt/ovirt-storage-domain.c
+index 38c4a62..e255565 100644
+--- a/govirt/ovirt-storage-domain.c
++++ b/govirt/ovirt-storage-domain.c
+@@ -285,20 +285,13 @@ G_GNUC_INTERNAL
+ OvirtStorageDomain *ovirt_storage_domain_new_from_xml(RestXmlNode *node,
+                                                       GError **error)
+ {
+-    GObject *domain;
+-
+-    domain = g_initable_new(OVIRT_TYPE_STORAGE_DOMAIN, NULL, error,
+-                            "xml-node", node, NULL);
+-
++    OvirtResource *domain = ovirt_resource_new_from_xml(OVIRT_TYPE_STORAGE_DOMAIN, node, error);
+     return OVIRT_STORAGE_DOMAIN(domain);
+ }
+ 
+ OvirtStorageDomain *ovirt_storage_domain_new(void)
+ {
+-    GObject *domain;
+-
+-    domain = g_initable_new(OVIRT_TYPE_STORAGE_DOMAIN, NULL, NULL, NULL);
+-
++    OvirtResource *domain = ovirt_resource_new(OVIRT_TYPE_STORAGE_DOMAIN);
+     return OVIRT_STORAGE_DOMAIN(domain);
+ }
+ 
+diff --git a/govirt/ovirt-utils.c b/govirt/ovirt-utils.c
+index a200e48..1898862 100644
+--- a/govirt/ovirt-utils.c
++++ b/govirt/ovirt-utils.c
+@@ -32,6 +32,7 @@
+ 
+ #include "ovirt-error.h"
+ #include "ovirt-resource.h"
++#include "ovirt-resource-private.h"
+ 
+ RestXmlNode *
+ ovirt_rest_xml_node_from_call(RestProxyCall *call)
+@@ -142,7 +143,7 @@ _set_property_value_from_type(GValue *value,
+     const char *value_str;
+ 
+     if (g_type_is_a(type, OVIRT_TYPE_RESOURCE)) {
+-        GObject *resource_value = g_initable_new(type, NULL, NULL, "xml-node", node, NULL);
++        OvirtResource *resource_value = ovirt_resource_new_from_xml(type, node, NULL);
+         g_value_set_object(value, resource_value);
+         goto end;
+     } else if (g_type_is_a(type, G_TYPE_STRV)) {
+diff --git a/govirt/ovirt-vm-pool.c b/govirt/ovirt-vm-pool.c
+index 3187a8c..9d0d742 100644
+--- a/govirt/ovirt-vm-pool.c
++++ b/govirt/ovirt-vm-pool.c
+@@ -168,7 +168,8 @@ static void ovirt_vm_pool_init(G_GNUC_UNUSED OvirtVmPool *vm_pool)
+ 
+ OvirtVmPool *ovirt_vm_pool_new(void)
+ {
+-    return OVIRT_VM_POOL(g_initable_new(OVIRT_TYPE_VM_POOL, NULL, NULL, NULL));
++    OvirtResource *vm_pool = ovirt_resource_new(OVIRT_TYPE_VM_POOL);
++    return OVIRT_VM_POOL(vm_pool);
+ }
+ 
+ 
+diff --git a/govirt/ovirt-vm.c b/govirt/ovirt-vm.c
+index 18c7672..f24ae10 100644
+--- a/govirt/ovirt-vm.c
++++ b/govirt/ovirt-vm.c
+@@ -163,15 +163,17 @@ static void ovirt_vm_init(G_GNUC_UNUSED OvirtVm *vm)
+     vm->priv = OVIRT_VM_GET_PRIVATE(vm);
+ }
+ 
++G_GNUC_INTERNAL
+ OvirtVm *ovirt_vm_new_from_xml(RestXmlNode *node, GError **error)
+ {
+-    return OVIRT_VM(g_initable_new(OVIRT_TYPE_VM, NULL, error,
+-                                   "xml-node", node, NULL));
++    OvirtResource *vm = ovirt_resource_new_from_xml(OVIRT_TYPE_VM, node, error);
++    return OVIRT_VM(vm);
+ }
+ 
+ OvirtVm *ovirt_vm_new(void)
+ {
+-    return OVIRT_VM(g_initable_new(OVIRT_TYPE_VM, NULL, NULL, NULL));
++    OvirtResource *vm = ovirt_resource_new(OVIRT_TYPE_VM);
++    return OVIRT_VM(vm);
+ }
+ 
+ 
+-- 
+2.13.6
+

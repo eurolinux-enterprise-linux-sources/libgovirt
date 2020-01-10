@@ -1,0 +1,202 @@
+From bbe0782f2ba5dc4d4a0bc16522628b336c392838 Mon Sep 17 00:00:00 2001
+From: "Eduardo Lima (Etrunko)" <etrunko@redhat.com>
+Date: Fri, 7 Apr 2017 16:25:46 -0300
+Subject: [PATCH] New API functions to enable search queries of collections
+
+Currently it is not possible to specify search query to optimize the
+collections returned by the REST API. It is necessary to retrieve and
+parse the full results and then iterate over the data to find what you
+are really looking for.
+
+This patch introduces the search functionality for the APIs that are
+currently supported, improving bandwidth usage and also the need to
+iterate over the results.
+
+Like the previous patch, this patch also introduces an auxiliary
+function in ovirt-collection to retrieve a sub-collection with a search
+query.
+
+Signed-off-by: Eduardo Lima (Etrunko) <etrunko@redhat.com>
+---
+ govirt/govirt.sym                 |  4 +++
+ govirt/ovirt-api.c                | 60 +++++++++++++++++++++++++++++++++++++++
+ govirt/ovirt-api.h                |  3 ++
+ govirt/ovirt-collection-private.h |  6 ++++
+ govirt/ovirt-collection.c         | 31 ++++++++++++++++++++
+ 5 files changed, 104 insertions(+)
+
+diff --git a/govirt/govirt.sym b/govirt/govirt.sym
+index 178ab07..f12190d 100644
+--- a/govirt/govirt.sym
++++ b/govirt/govirt.sym
+@@ -105,6 +105,10 @@ GOVIRT_0.3.2 {
+         ovirt_resource_delete;
+         ovirt_resource_delete_async;
+         ovirt_resource_delete_finish;
++
++        ovirt_api_search_storage_domains;
++        ovirt_api_search_vms;
++        ovirt_api_search_vm_pools;
+ } GOVIRT_0.3.1;
+ 
+ # .... define new API here using predicted next version number ....
+diff --git a/govirt/ovirt-api.c b/govirt/ovirt-api.c
+index b6c1d26..bc2bf36 100644
+--- a/govirt/ovirt-api.c
++++ b/govirt/ovirt-api.c
+@@ -132,6 +132,26 @@ OvirtCollection *ovirt_api_get_vms(OvirtApi *api)
+ }
+ 
+ /**
++ * ovirt_api_search_vms:
++ * @api: a #OvirtApi
++ * @query: search query
++ *
++ * Return value: (transfer full):
++ */
++OvirtCollection *ovirt_api_search_vms(OvirtApi *api, const char *query)
++{
++    g_return_val_if_fail(OVIRT_IS_API(api), NULL);
++
++    return ovirt_sub_collection_new_from_resource_search(OVIRT_RESOURCE(api),
++                                                         "vms/search",
++                                                         "vms",
++                                                         OVIRT_TYPE_VM,
++                                                         "vm",
++                                                         query);
++}
++
++
++/**
+  * ovirt_api_get_vm_pools:
+  * @api: a #OvirtApi
+  *
+@@ -153,6 +173,26 @@ OvirtCollection *ovirt_api_get_vm_pools(OvirtApi *api)
+ 
+ 
+ /**
++ * ovirt_api_search_vm_pools:
++ * @api: a #OvirtApi
++ * @query: search query
++ *
++ * Return value: (transfer full):
++ */
++OvirtCollection *ovirt_api_search_vm_pools(OvirtApi *api, const char *query)
++{
++    g_return_val_if_fail(OVIRT_IS_API(api), NULL);
++
++    return ovirt_sub_collection_new_from_resource_search(OVIRT_RESOURCE(api),
++                                                         "vmpools/search",
++                                                         "vmpools",
++                                                         OVIRT_TYPE_VM_POOL,
++                                                         "vmpool",
++                                                         query);
++}
++
++
++/**
+  * ovirt_api_get_storage_domains:
+  * @api: a #OvirtApi
+  *
+@@ -171,3 +211,23 @@ OvirtCollection *ovirt_api_get_storage_domains(OvirtApi *api)
+ 
+     return api->priv->storage_domains;
+ }
++
++
++/**
++ * ovirt_api_search_storage_domains:
++ * @api: a #OvirtApi
++ * @query: search query
++ *
++ * Return value: (transfer full):
++ */
++OvirtCollection *ovirt_api_search_storage_domains(OvirtApi *api, const char *query)
++{
++    g_return_val_if_fail(OVIRT_IS_API(api), NULL);
++
++    return ovirt_sub_collection_new_from_resource_search(OVIRT_RESOURCE(api),
++                                                         "storagedomains/search",
++                                                         "storage_domains",
++                                                         OVIRT_TYPE_STORAGE_DOMAIN,
++                                                         "storage_domain",
++                                                         query);
++}
+diff --git a/govirt/ovirt-api.h b/govirt/ovirt-api.h
+index 5f0d4e9..1bf6c02 100644
+--- a/govirt/ovirt-api.h
++++ b/govirt/ovirt-api.h
+@@ -62,8 +62,11 @@ GType ovirt_api_get_type(void);
+ OvirtApi *ovirt_api_new(void);
+ 
+ OvirtCollection *ovirt_api_get_storage_domains(OvirtApi *api);
++OvirtCollection *ovirt_api_search_storage_domains(OvirtApi *api, const char *query);
+ OvirtCollection *ovirt_api_get_vms(OvirtApi *api);
++OvirtCollection *ovirt_api_search_vms(OvirtApi *api, const char *query);
+ OvirtCollection *ovirt_api_get_vm_pools(OvirtApi *api);
++OvirtCollection *ovirt_api_search_vm_pools(OvirtApi *api, const char *query);
+ 
+ G_END_DECLS
+ 
+diff --git a/govirt/ovirt-collection-private.h b/govirt/ovirt-collection-private.h
+index d955fc6..cf7e603 100644
+--- a/govirt/ovirt-collection-private.h
++++ b/govirt/ovirt-collection-private.h
+@@ -46,6 +46,12 @@ OvirtCollection *ovirt_sub_collection_new_from_resource(OvirtResource *resource,
+                                                         const char *collection_name,
+                                                         GType resource_type,
+                                                         const char *resource_name);
++OvirtCollection *ovirt_sub_collection_new_from_resource_search(OvirtResource *resource,
++                                                               const char *href,
++                                                               const char *collection_name,
++                                                               GType resource_type,
++                                                               const char *resource_name,
++                                                               const char *query);
+ 
+ G_END_DECLS
+ 
+diff --git a/govirt/ovirt-collection.c b/govirt/ovirt-collection.c
+index 3818bbd..ff9c27f 100644
+--- a/govirt/ovirt-collection.c
++++ b/govirt/ovirt-collection.c
+@@ -338,6 +338,37 @@ OvirtCollection *ovirt_sub_collection_new_from_resource(OvirtResource *resource,
+     return ovirt_collection_new(link, collection_name, resource_type, resource_name);
+ }
+ 
++OvirtCollection *ovirt_sub_collection_new_from_resource_search(OvirtResource *resource,
++                                                               const char *href,
++                                                               const char *collection_name,
++                                                               GType resource_type,
++                                                               const char *resource_name,
++                                                               const char *query)
++{
++    const char *link;
++    char *substr;
++    gchar *link_query, *escaped_query;
++    OvirtCollection *collection;
++
++    link = ovirt_resource_get_sub_collection(resource, href);
++    if (link == NULL)
++        return NULL;
++
++    /* link is will be something like "/ovirt-engine/api/vms?search={query}", so
++     * we need to strip out {query} substring.
++     */
++    substr = g_strrstr(link, "{query}");
++    if (substr != NULL)
++        *substr = '\0';
++
++    escaped_query = g_uri_escape_string(query, NULL, FALSE);
++    link_query = g_strconcat(link, escaped_query, NULL);
++    collection = ovirt_collection_new(link_query, collection_name, resource_type, resource_name);
++    g_free(escaped_query);
++    g_free(link_query);
++
++    return collection;
++}
+ 
+ /**
+  * ovirt_collection_fetch:
+-- 
+2.13.6
+

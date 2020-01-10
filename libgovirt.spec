@@ -2,6 +2,14 @@
 
 %global with_gir 0
 
+# Default to skipping autoreconf.  Distros can change just this one line
+# (or provide a command-line override) if they backport any patches that
+# touch configure.ac or Makefile.am.
+
+# Force running autoreconf because data center patches touch Makefile.am.
+# To disable autoreconf, change the value to 0.
+%{!?enable_autotools:%global enable_autotools 1}
+
 %if 0%{?fedora} >= 15 || 0%{?rhel} >= 7
 %global with_gir 1
 %endif
@@ -9,7 +17,7 @@
 Summary: A GObject library for interacting with oVirt REST API
 Name: libgovirt
 Version: 0.3.3
-Release: 5%{?dist}%{?extra_release}
+Release: 6%{?dist}%{?extra_release}
 License: LGPLv2+
 Group: Development/Libraries
 Source: http://ftp.gnome.org/pub/GNOME/sources/libgovirt/0.3/%{name}-%{version}.tar.xz
@@ -26,10 +34,45 @@ Patch0009: 0009-New-storage-format-added-in-oVirt-4.1.patch
 Patch0010: 0010-proxy-Fix-bug-in-cancelled-disconnection-after-async.patch
 Patch0011: 0011-proxy-Hold-reference-to-cancellable-object.patch
 Patch0012: 0012-proxy-Check-if-operation-is-cancelled-before-disconn.patch
+Patch0013: 0013-storage-domain-Factor-out-property-value-setting-fro.patch
+Patch0014: 0014-storage-domain-use-explicit-initialization-of-struct.patch
+Patch0015: 0015-storage-domain-Move-out-ovirt_resource_parse_xml-to-.patch
+Patch0016: 0016-utils-Remove-unused-function-ovirt_rest_xml_node_get.patch
+Patch0017: 0017-utils-Rename-ovirt_rest_xml_node_get_content_va-to-o.patch
+Patch0018: 0018-utils-Retrieve-node-attributes-in-ovirt_resource_par.patch
+Patch0019: 0019-utils-Support-G_TYPE_STRING-in-_set_property_value_f.patch
+Patch0020: 0020-utils-Support-G_TYPE_STRV-in-_set_property_value_fro.patch
+Patch0021: 0021-Introduce-auxiliary-function-ovirt_sub_collection_ne.patch
+Patch0022: 0022-New-API-functions-to-enable-search-queries-of-collec.patch
+Patch0023: 0023-Introduce-ovirt_resource_new-functions.patch
+Patch0024: 0024-Use-ovirt_resource_new-functions-instead-of-g_initab.patch
+Patch0025: 0025-Move-resource-type-definitions-to-ovirt-types.h.patch
+Patch0026: 0026-Initial-support-for-hosts.patch
+Patch0027: 0027-Initial-support-for-clusters.patch
+Patch0028: 0028-Initial-support-for-data-centers.patch
+Patch0029: 0029-vm-Introduce-ovirt_vm_get_host.patch
+Patch0030: 0030-vm-Introduce-ovirt_vm_get_cluster.patch
+Patch0031: 0031-host-Introduce-ovirt_host_get_cluster.patch
+Patch0032: 0032-cluster-Introduce-ovirt_cluster_get_data_center.patch
+Patch0033: 0033-storage-domain-Retrieve-data-center-ids.patch
+Patch0034: 0034-Add-missing-include-in-govirt.h.patch
+Patch0035: 0035-resource-Fix-ovirt_resource_rest_call_sync-return-va.patch
+Patch0036: 0036-resource-Fix-ovirt_resource_rest_call_sync-crash-on-.patch
+Patch0037: 0037-resource-Fix-ovirt_resource_init_from_xml_real-preco.patch
+Patch0038: 0038-resource-Update-xml-node-in-ovirt_resource_init_from.patch
+Patch0039: 0039-utils-Drop-type-member-from-OvirtXmlElement-struct.patch
 
-BuildRequires: glib2-devel
-BuildRequires: intltool
+%if 0%{?enable_autotools}
+BuildRequires: autoconf
+BuildRequires: automake
+BuildRequires: gettext-devel
+BuildRequires: libtool
+%endif
+
+BuildRequires: pkgconfig(glib-2.0)
 BuildRequires: rest-devel >= 0.7.92
+
+BuildRequires: intltool
 %if %{with_gir}
 BuildRequires: gobject-introspection-devel
 %endif
@@ -57,6 +100,10 @@ Libraries, includes, etc. to compile with the libgovirt library
 %autosetup -S git_am
 
 %build
+%if 0%{?enable_autotools}
+autoreconf -if
+%endif
+
 %if %{with_gir}
 %global gir_arg --enable-introspection=yes
 %else
@@ -97,6 +144,10 @@ make check
 %endif
 
 %changelog
+* Mon Oct 02 2017 Eduardo Lima (Etrunko) <etrunko@redhat.com> - 0.3.3-6
+- Add support for Hosts, Clusters and Data Centers
+  Resolves: rhbz#1428401
+
 * Mon Mar 13 2017 Eduardo Lima (Etrunko) <etrunko@redhat.com> - 0.3.3-5
 - New storage format added in oVirt 4.1
   Resolves: rhbz#1346215

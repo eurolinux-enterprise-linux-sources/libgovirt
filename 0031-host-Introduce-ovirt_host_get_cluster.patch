@@ -1,0 +1,99 @@
+From 357d75a94ec50d8a83f98d32cba5676ec8249111 Mon Sep 17 00:00:00 2001
+From: "Eduardo Lima (Etrunko)" <etrunko@redhat.com>
+Date: Thu, 13 Jul 2017 17:44:13 -0300
+Subject: [PATCH] host: Introduce ovirt_host_get_cluster()
+
+Following the same principle as previous commits, this functions can be
+used to retrieve the cluster that includes this host.
+
+Signed-off-by: Eduardo Lima (Etrunko) <etrunko@redhat.com>
+---
+ govirt/govirt.sym   |  1 +
+ govirt/ovirt-host.c | 35 ++++++++++++++++++++++++++++++++++-
+ govirt/ovirt-host.h |  1 +
+ 3 files changed, 36 insertions(+), 1 deletion(-)
+
+diff --git a/govirt/govirt.sym b/govirt/govirt.sym
+index a7f7516..f58ab25 100644
+--- a/govirt/govirt.sym
++++ b/govirt/govirt.sym
+@@ -130,6 +130,7 @@ GOVIRT_0.3.2 {
+         ovirt_data_center_get_type;
+         ovirt_data_center_new;
+ 
++        ovirt_host_get_cluster;
+         ovirt_host_get_type;
+         ovirt_host_get_vms;
+         ovirt_host_new;
+diff --git a/govirt/ovirt-host.c b/govirt/ovirt-host.c
+index 2df2a64..191b360 100644
+--- a/govirt/ovirt-host.c
++++ b/govirt/ovirt-host.c
+@@ -42,6 +42,19 @@ enum {
+     PROP_CLUSTER_ID,
+ };
+ 
++
++static const char *get_cluster_href(OvirtHost *host)
++{
++    if (host->priv->cluster_href == NULL &&
++        host->priv->cluster_id != NULL) {
++        host->priv->cluster_href = g_strdup_printf("%s/%s",
++                                                   "/ovirt-engine/api/clusters",
++                                                   host->priv->cluster_id);
++    }
++
++    return host->priv->cluster_href;
++}
++
+ static void ovirt_host_get_property(GObject *object,
+                                     guint prop_id,
+                                     GValue *value,
+@@ -51,7 +64,7 @@ static void ovirt_host_get_property(GObject *object,
+ 
+     switch (prop_id) {
+     case PROP_CLUSTER_HREF:
+-        g_value_set_string(value, host->priv->cluster_href);
++        g_value_set_string(value, get_cluster_href(host));
+         break;
+     case PROP_CLUSTER_ID:
+         g_value_set_string(value, host->priv->cluster_id);
+@@ -212,3 +225,23 @@ OvirtCollection *ovirt_host_get_vms(OvirtHost *host)
+ 
+     return host->priv->vms;
+ }
++
++
++/**
++ * ovirt_host_get_cluster:
++ * @host: a #OvirtHost
++ *
++ * Gets a #OvirtCluster representing the cluster the host belongs
++ * to. This method does not initiate any network activity, the remote host must
++ * be then be fetched using ovirt_resource_refresh() or
++ * ovirt_resource_refresh_async().
++ *
++ * Return value: (transfer full): a #OvirtCluster representing cluster the @host
++ * belongs to.
++ */
++OvirtCluster *ovirt_host_get_cluster(OvirtHost *host)
++{
++    g_return_val_if_fail(OVIRT_IS_HOST(host), NULL);
++    g_return_val_if_fail(host->priv->cluster_id != NULL, NULL);
++    return ovirt_cluster_new_from_id(host->priv->cluster_id, get_cluster_href(host));
++}
+diff --git a/govirt/ovirt-host.h b/govirt/ovirt-host.h
+index 91441f6..cdf702c 100644
+--- a/govirt/ovirt-host.h
++++ b/govirt/ovirt-host.h
+@@ -60,6 +60,7 @@ GType ovirt_host_get_type(void);
+ 
+ OvirtHost *ovirt_host_new(void);
+ OvirtCollection *ovirt_host_get_vms(OvirtHost *host);
++OvirtCluster *ovirt_host_get_cluster(OvirtHost *host);
+ 
+ G_END_DECLS
+ 
+-- 
+2.13.6
+

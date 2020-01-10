@@ -1,0 +1,139 @@
+From cb2fdd1639a181de3861efc1dab91f05e1a2d09d Mon Sep 17 00:00:00 2001
+From: "Eduardo Lima (Etrunko)" <etrunko@redhat.com>
+Date: Thu, 13 Jul 2017 16:43:53 -0300
+Subject: [PATCH] Move resource type definitions to ovirt-types.h
+
+With recently added ovirt_resource_new* functions, it is now possible to
+create any type of resource, being only necessary to pass the type as
+argument.
+
+In order to avoid interdependencies between objects, we need a common
+place for definition of the resource types. For instance, it should be
+possible to access a OvirtHost from a OvirtVm and vice-versa.
+
+Signed-off-by: Eduardo Lima (Etrunko) <etrunko@redhat.com>
+---
+ govirt/ovirt-api.h            | 1 -
+ govirt/ovirt-cdrom.h          | 1 -
+ govirt/ovirt-collection.h     | 1 -
+ govirt/ovirt-storage-domain.h | 1 -
+ govirt/ovirt-types.h          | 7 +++++++
+ govirt/ovirt-vm-display.h     | 2 +-
+ govirt/ovirt-vm-pool.h        | 1 -
+ govirt/ovirt-vm.h             | 1 -
+ 8 files changed, 8 insertions(+), 7 deletions(-)
+
+diff --git a/govirt/ovirt-api.h b/govirt/ovirt-api.h
+index 1bf6c02..d511d70 100644
+--- a/govirt/ovirt-api.h
++++ b/govirt/ovirt-api.h
+@@ -37,7 +37,6 @@ G_BEGIN_DECLS
+ #define OVIRT_IS_API_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE ((klass), OVIRT_TYPE_API))
+ #define OVIRT_API_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj), OVIRT_TYPE_API, OvirtApiClass))
+ 
+-typedef struct _OvirtApi OvirtApi;
+ typedef struct _OvirtApiPrivate OvirtApiPrivate;
+ typedef struct _OvirtApiClass OvirtApiClass;
+ 
+diff --git a/govirt/ovirt-cdrom.h b/govirt/ovirt-cdrom.h
+index a268d01..a43d85d 100644
+--- a/govirt/ovirt-cdrom.h
++++ b/govirt/ovirt-cdrom.h
+@@ -36,7 +36,6 @@ G_BEGIN_DECLS
+ #define OVIRT_IS_CDROM_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE ((klass), OVIRT_TYPE_CDROM))
+ #define OVIRT_CDROM_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj), OVIRT_TYPE_CDROM, OvirtCdromClass))
+ 
+-typedef struct _OvirtCdrom OvirtCdrom;
+ typedef struct _OvirtCdromPrivate OvirtCdromPrivate;
+ typedef struct _OvirtCdromClass OvirtCdromClass;
+ 
+diff --git a/govirt/ovirt-collection.h b/govirt/ovirt-collection.h
+index b41d269..af630e1 100644
+--- a/govirt/ovirt-collection.h
++++ b/govirt/ovirt-collection.h
+@@ -36,7 +36,6 @@ G_BEGIN_DECLS
+ #define OVIRT_IS_COLLECTION_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE ((klass), OVIRT_TYPE_COLLECTION))
+ #define OVIRT_COLLECTION_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj), OVIRT_TYPE_COLLECTION, OvirtCollectionClass))
+ 
+-typedef struct _OvirtCollection OvirtCollection;
+ typedef struct _OvirtCollectionPrivate OvirtCollectionPrivate;
+ typedef struct _OvirtCollectionClass OvirtCollectionClass;
+ 
+diff --git a/govirt/ovirt-storage-domain.h b/govirt/ovirt-storage-domain.h
+index 79f1741..dd7b593 100644
+--- a/govirt/ovirt-storage-domain.h
++++ b/govirt/ovirt-storage-domain.h
+@@ -61,7 +61,6 @@ typedef enum {
+     OVIRT_STORAGE_DOMAIN_TYPE_IMAGE,
+ } OvirtStorageDomainType;
+ 
+-typedef struct _OvirtStorageDomain OvirtStorageDomain;
+ typedef struct _OvirtStorageDomainPrivate OvirtStorageDomainPrivate;
+ typedef struct _OvirtStorageDomainClass OvirtStorageDomainClass;
+ 
+diff --git a/govirt/ovirt-types.h b/govirt/ovirt-types.h
+index 6e83368..c89521b 100644
+--- a/govirt/ovirt-types.h
++++ b/govirt/ovirt-types.h
+@@ -25,7 +25,14 @@
+ 
+ G_BEGIN_DECLS
+ 
++typedef struct _OvirtApi OvirtApi;
++typedef struct _OvirtCdrom OvirtCdrom;
++typedef struct _OvirtCollection OvirtCollection;
+ typedef struct _OvirtProxy OvirtProxy;
++typedef struct _OvirtStorageDomain OvirtStorageDomain;
++typedef struct _OvirtVmDisplay OvirtVmDisplay;
++typedef struct _OvirtVmPool OvirtVmPool;
++typedef struct _OvirtVm OvirtVm;
+ 
+ G_END_DECLS
+ 
+diff --git a/govirt/ovirt-vm-display.h b/govirt/ovirt-vm-display.h
+index 2b8a86d..f7eb310 100644
+--- a/govirt/ovirt-vm-display.h
++++ b/govirt/ovirt-vm-display.h
+@@ -23,6 +23,7 @@
+ #define __OVIRT_VM_DISPLAY_H__
+ 
+ #include <glib-object.h>
++#include <govirt/ovirt-types.h>
+ 
+ G_BEGIN_DECLS
+ 
+@@ -33,7 +34,6 @@ G_BEGIN_DECLS
+ #define OVIRT_IS_VM_DISPLAY_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE ((klass), OVIRT_TYPE_VM_DISPLAY))
+ #define OVIRT_VM_DISPLAY_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj), OVIRT_TYPE_VM_DISPLAY, OvirtVmDisplayClass))
+ 
+-typedef struct _OvirtVmDisplay OvirtVmDisplay;
+ typedef struct _OvirtVmDisplayPrivate OvirtVmDisplayPrivate;
+ typedef struct _OvirtVmDisplayClass OvirtVmDisplayClass;
+ 
+diff --git a/govirt/ovirt-vm-pool.h b/govirt/ovirt-vm-pool.h
+index ee2f55c..10e7be7 100644
+--- a/govirt/ovirt-vm-pool.h
++++ b/govirt/ovirt-vm-pool.h
+@@ -35,7 +35,6 @@ G_BEGIN_DECLS
+ #define OVIRT_IS_VM_POOL_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE ((klass), OVIRT_TYPE_VM_POOL))
+ #define OVIRT_VM_POOL_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj), OVIRT_TYPE_VM_POOL, OvirtVmPoolClass))
+ 
+-typedef struct _OvirtVmPool OvirtVmPool;
+ typedef struct _OvirtVmPoolPrivate OvirtVmPoolPrivate;
+ typedef struct _OvirtVmPoolClass OvirtVmPoolClass;
+ 
+diff --git a/govirt/ovirt-vm.h b/govirt/ovirt-vm.h
+index 10910e3..1e6c7ad 100644
+--- a/govirt/ovirt-vm.h
++++ b/govirt/ovirt-vm.h
+@@ -41,7 +41,6 @@ G_BEGIN_DECLS
+ #define OVIRT_IS_VM_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE ((klass), OVIRT_TYPE_VM))
+ #define OVIRT_VM_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj), OVIRT_TYPE_VM, OvirtVmClass))
+ 
+-typedef struct _OvirtVm OvirtVm;
+ typedef struct _OvirtVmPrivate OvirtVmPrivate;
+ typedef struct _OvirtVmClass OvirtVmClass;
+ 
+-- 
+2.13.6
+
