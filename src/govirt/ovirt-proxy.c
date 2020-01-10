@@ -48,7 +48,8 @@ enum {
     PROP_0,
     PROP_CA_CERT,
     PROP_ADMIN,
-    PROP_SESSION_ID
+    PROP_SESSION_ID,
+    PROP_SSO_TOKEN
 };
 
 #define CA_CERT_FILENAME "ca.crt"
@@ -283,6 +284,7 @@ void ovirt_rest_call_async(OvirtRestCall *call,
     data->call_user_data = user_data;
     data->destroy_call_data = destroy_func;
     if (cancellable != NULL) {
+        data->cancellable = cancellable;
         data->cancellable_cb_id = g_cancellable_connect(cancellable,
                                                         G_CALLBACK (call_async_cancelled_cb),
                                                         call, NULL);
@@ -426,7 +428,7 @@ static GByteArray *get_ca_cert_data(OvirtProxy *proxy)
     return g_byte_array_new_take((guchar *)content, length);
 }
 
-static void ovirt_proxy_set_tmp_ca_file(OvirtProxy *proxy, const char *ca_file)
+static void ovirt_proxy_free_tmp_ca_file(OvirtProxy *proxy)
 {
     if (proxy->priv->tmp_ca_file != NULL) {
         int unlink_failed;
@@ -435,16 +437,23 @@ static void ovirt_proxy_set_tmp_ca_file(OvirtProxy *proxy, const char *ca_file)
             g_warning("Failed to unlink '%s'", proxy->priv->tmp_ca_file);
         }
         g_free(proxy->priv->tmp_ca_file);
+        proxy->priv->tmp_ca_file = NULL;
     }
+}
+
+static void ovirt_proxy_set_tmp_ca_file(OvirtProxy *proxy, const char *ca_file)
+{
+    ovirt_proxy_free_tmp_ca_file(proxy);
     proxy->priv->tmp_ca_file = g_strdup(ca_file);
     if (ca_file != NULL) {
-        /* Not blocking this signal would cause the callback to call again
-         * set_tmp_ca_file with a NULL ca_file, undoing the work we just did */
-        g_signal_handler_block(G_OBJECT(proxy),
-                               proxy->priv->ssl_ca_file_changed_id);
+        /* We block invokations of ssl_ca_file_changed() using the 'setting_ca_file' boolean
+         * g_signal_handler_{un,}block is not working well enough as
+         * ovirt_proxy_set_tmp_ca_file() can be called as part of a g_object_set call,
+         * and unblocking "notify::ssl-ca-file" right after setting its value
+         * is not enough to prevent ssl_ca_file_changed() from running.
+         */
+        proxy->priv->setting_ca_file = TRUE;
         g_object_set(G_OBJECT(proxy), "ssl-ca-file", ca_file, NULL);
-        g_signal_handler_unblock(G_OBJECT(proxy),
-                                 proxy->priv->ssl_ca_file_changed_id);
     }
 }
 
@@ -456,7 +465,7 @@ static char *write_to_tmp_file(const char *template,
                                GError **error)
 {
     GFile *tmp_file = NULL;
-    GFileIOStream *iostream;
+    GFileIOStream *iostream = NULL;
     GOutputStream *output;
     gboolean write_ok;
     char *result = NULL;
@@ -473,11 +482,14 @@ static char *write_to_tmp_file(const char *template,
         goto end;
     }
 
-    return g_file_get_path(tmp_file);
+    result = g_file_get_path(tmp_file);
 
 end:
     if (tmp_file != NULL) {
         g_object_unref(G_OBJECT(tmp_file));
+    }
+    if (iostream != NULL) {
+        g_object_unref(G_OBJECT(iostream));
     }
 
     return result;
@@ -575,6 +587,57 @@ end:
 }
 
 
+static void ovirt_proxy_update_vm_display_ca(OvirtProxy *proxy)
+{
+    GList *vms;
+    GList *it;
+
+    vms = ovirt_proxy_get_vms_internal(proxy);
+    for (it = vms; it != NULL; it = it->next) {
+        OvirtVm *vm = OVIRT_VM(it->data);
+        OvirtVmDisplay *display;
+
+        g_object_get(G_OBJECT(vm), "display", &display, NULL);
+        if (display != NULL) {
+            g_object_set(G_OBJECT(display),
+                         "ca-cert", proxy->priv->display_ca,
+                         NULL);
+            g_object_unref(display);
+        } else {
+            char *name;
+            g_object_get(vm, "name", &name, NULL);
+            g_debug("Not setting display CA for '%s' since it has no display",  name);
+            g_free(name);
+        }
+    }
+    g_list_free(vms);
+}
+
+
+static void set_display_ca_cert_from_data(OvirtProxy *proxy,
+                                          char *ca_cert_data,
+                                          gsize ca_cert_len)
+
+{
+    if (proxy->priv->display_ca != NULL)
+        g_byte_array_unref(proxy->priv->display_ca);
+
+    proxy->priv->display_ca = g_byte_array_new_take((guint8 *)ca_cert_data,
+                                                    ca_cert_len);
+
+    /* While the fetched CA certificate has historically been used both as the CA
+     * certificate used during REST API communication and as the one to use for
+     * SPICE communication, this function really fetches the one meant for SPICE
+     * communication. The one used for REST API communication may or may not be
+     * the same.
+     * An OvirtVmDisplay::ca-cert property has been added when this design issue
+     * became apparent, so we need to update this property after fetching the
+     * certificate.
+     */
+    ovirt_proxy_update_vm_display_ca(proxy);
+}
+
+
 gboolean ovirt_proxy_fetch_ca_certificate(OvirtProxy *proxy, GError **error)
 {
     GFile *source = NULL;
@@ -600,6 +663,8 @@ gboolean ovirt_proxy_fetch_ca_certificate(OvirtProxy *proxy, GError **error)
         goto error;
 
     set_ca_cert_from_data(proxy, cert_data, cert_length);
+    /* takes ownership of cert_data */
+    set_display_ca_cert_from_data(proxy, cert_data, cert_length);
 
 error:
     if (source != NULL)
@@ -624,16 +689,21 @@ static void ca_file_loaded_cb(GObject *source_object,
                                 NULL, &error);
     if (error != NULL) {
         g_simple_async_result_take_error(fetch_result, error);
-        g_simple_async_result_complete (fetch_result);
-        return;
+        goto end;
     }
 
     proxy = g_async_result_get_source_object(G_ASYNC_RESULT(fetch_result));
 
     set_ca_cert_from_data(OVIRT_PROXY(proxy), cert_data, cert_length);
+    /* takes ownership of cert_data */
+    set_display_ca_cert_from_data(OVIRT_PROXY(proxy),
+                                  cert_data, cert_length);
     g_object_unref(proxy);
     g_simple_async_result_set_op_res_gboolean(fetch_result, TRUE);
+
+end:
     g_simple_async_result_complete (fetch_result);
+    g_object_unref(fetch_result);
 }
 
 void ovirt_proxy_fetch_ca_certificate_async(OvirtProxy *proxy,
@@ -696,6 +766,9 @@ static void ovirt_proxy_get_property(GObject *object,
     case PROP_SESSION_ID:
         g_value_set_string(value, proxy->priv->jsessionid);
         break;
+    case PROP_SSO_TOKEN:
+        g_value_set_string(value, proxy->priv->sso_token);
+        break;
 
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -716,14 +789,35 @@ static void ovirt_proxy_set_session_id(OvirtProxy *proxy, const char *session_id
         domain = url;
     }
 
+    if (proxy->priv->jsessionid_cookie != NULL) {
+        soup_cookie_jar_delete_cookie(proxy->priv->cookie_jar,
+                proxy->priv->jsessionid_cookie);
+        proxy->priv->jsessionid_cookie = NULL;
+    }
     g_free(proxy->priv->jsessionid);
     proxy->priv->jsessionid = g_strdup(session_id);
     if (proxy->priv->jsessionid != NULL) {
         SoupCookie *cookie;
         cookie = soup_cookie_new("JSESSIONID", session_id, domain, "/ovirt-engine/api", -1);
         soup_cookie_jar_add_cookie(proxy->priv->cookie_jar, cookie);
+        proxy->priv->jsessionid_cookie = cookie;
+        ovirt_proxy_add_header(proxy, "Prefer", "persistent-auth");
+    } else {
+        ovirt_proxy_add_header(proxy, "Prefer", NULL);
     }
     g_free(url);
+}
+
+static void ovirt_proxy_set_sso_token(OvirtProxy *proxy, const char *sso_token)
+{
+    char *header_value;
+
+    g_free(proxy->priv->sso_token);
+    proxy->priv->sso_token = g_strdup(sso_token);
+
+    header_value = g_strdup_printf("Bearer %s", sso_token);
+    ovirt_proxy_add_header(proxy, "Authorization", header_value);
+    g_free(header_value);
 }
 
 
@@ -754,6 +848,10 @@ static void ovirt_proxy_set_property(GObject *object,
         ovirt_proxy_set_session_id(proxy, g_value_get_string(value));
         break;
 
+    case PROP_SSO_TOKEN:
+        ovirt_proxy_set_sso_token(proxy, g_value_get_string(value));
+        break;
+
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
     }
@@ -764,14 +862,23 @@ ovirt_proxy_dispose(GObject *obj)
 {
     OvirtProxy *proxy = OVIRT_PROXY(obj);
 
-    if (proxy->priv->vms) {
-        g_hash_table_unref(proxy->priv->vms);
-        proxy->priv->vms = NULL;
-    }
-
     if (proxy->priv->cookie_jar) {
         g_object_unref(G_OBJECT(proxy->priv->cookie_jar));
         proxy->priv->cookie_jar = NULL;
+    }
+
+    g_warn_if_fail(proxy->priv->additional_headers != NULL);
+    g_hash_table_unref(proxy->priv->additional_headers);
+    proxy->priv->additional_headers = NULL;
+
+    if (proxy->priv->api != NULL) {
+        g_object_unref(proxy->priv->api);
+        proxy->priv->api = NULL;
+    }
+
+    if (proxy->priv->display_ca != NULL) {
+        g_byte_array_unref(proxy->priv->display_ca);
+        proxy->priv->display_ca = NULL;
     }
 
     G_OBJECT_CLASS(ovirt_proxy_parent_class)->dispose(obj);
@@ -782,8 +889,9 @@ ovirt_proxy_finalize(GObject *obj)
 {
     OvirtProxy *proxy = OVIRT_PROXY(obj);
 
-    ovirt_proxy_set_tmp_ca_file(proxy, NULL);
+    ovirt_proxy_free_tmp_ca_file(proxy);
     g_free(proxy->priv->jsessionid);
+    g_free(proxy->priv->sso_token);
 
     G_OBJECT_CLASS(ovirt_proxy_parent_class)->finalize(obj);
 }
@@ -814,14 +922,31 @@ ovirt_proxy_class_init(OvirtProxyClass *klass)
     oclass->get_property = ovirt_proxy_get_property;
     oclass->set_property = ovirt_proxy_set_property;
 
+    /**
+     * OvirtProxy:ca-cert:
+     *
+     * Path to a file containing the CA certificates to use for the HTTPS
+     * REST API communication with the oVirt instance
+     */
     g_object_class_install_property(oclass,
                                     PROP_CA_CERT,
                                     g_param_spec_boxed("ca-cert",
                                                        "ca-cert",
-                                                       "Virt CA certificate to use when connecting to remote VM",
+                                                       "Virt CA certificate to use for HTTPS REST communication",
                                                         G_TYPE_BYTE_ARRAY,
                                                         G_PARAM_READWRITE |
                                                         G_PARAM_STATIC_STRINGS));
+
+    /**
+     * OvirtProxy:admin:
+     *
+     * Indicates whether to connect to the REST API as an admin, or as a regular user.
+     * Different content will be shown for the same user depending on if they connect as
+     * an admin or not. Connecting as an admin requires to have admin priviledges on the
+     * oVirt instance.
+     *
+     * Since: 0.0.2
+     */
     g_object_class_install_property(oclass,
                                     PROP_ADMIN,
                                     g_param_spec_boolean("admin",
@@ -830,11 +955,37 @@ ovirt_proxy_class_init(OvirtProxyClass *klass)
                                                          FALSE,
                                                          G_PARAM_READWRITE |
                                                          G_PARAM_STATIC_STRINGS));
+    /**
+     * OvirtProxy:session-id:
+     *
+     * jsessionid cookie value. This allows to use the REST API without
+     * authenticating first. This was used by oVirt 3.6 and is now replaced
+     * by OvirtProxy:sso-token.
+     *
+     * Since: 0.3.1
+     */
     g_object_class_install_property(oclass,
                                     PROP_SESSION_ID,
                                     g_param_spec_string("session-id",
                                                         "session-id",
                                                         "oVirt/RHEV JSESSIONID",
+                                                        NULL,
+                                                        G_PARAM_READWRITE |
+                                                        G_PARAM_STATIC_STRINGS));
+
+    /**
+     * OvirtProxy:sso-token:
+     *
+     * Token to use for SSO. This allows to use the REST API without
+     * authenticating first. This is used starting with oVirt 4.0.
+     *
+     * Since: 0.3.4
+     */
+    g_object_class_install_property(oclass,
+                                    PROP_SSO_TOKEN,
+                                    g_param_spec_string("sso-token",
+                                                        "sso-token",
+                                                        "oVirt/RHEV SSO token",
                                                         NULL,
                                                         G_PARAM_READWRITE |
                                                         G_PARAM_STATIC_STRINGS));
@@ -846,7 +997,12 @@ static void ssl_ca_file_changed(GObject *gobject,
                                 GParamSpec *pspec,
                                 gpointer user_data)
 {
-    ovirt_proxy_set_tmp_ca_file(OVIRT_PROXY(gobject), NULL);
+    OvirtProxy *proxy = OVIRT_PROXY(gobject);
+    if (proxy->priv->setting_ca_file) {
+        proxy->priv->setting_ca_file = FALSE;
+        return;
+    }
+    ovirt_proxy_free_tmp_ca_file(OVIRT_PROXY(gobject));
 }
 
 static void
@@ -862,6 +1018,10 @@ ovirt_proxy_init(OvirtProxy *self)
     self->priv->cookie_jar = soup_cookie_jar_new();
     rest_proxy_add_soup_feature(REST_PROXY(self),
                                 SOUP_SESSION_FEATURE(self->priv->cookie_jar));
+    self->priv->additional_headers = g_hash_table_new_full(g_str_hash,
+                                                           g_str_equal,
+                                                           g_free,
+                                                           g_free);
 }
 
 /* FIXME : "uri" should just be a base domain, foo.example.com/some/path
@@ -926,15 +1086,116 @@ OvirtProxy *ovirt_proxy_new(const char *hostname)
 }
 
 
+static void vm_collection_changed(GObject *gobject,
+                                  GParamSpec *pspec,
+                                  gpointer user_data)
+{
+    ovirt_proxy_update_vm_display_ca(OVIRT_PROXY(user_data));
+}
+
+
+/**
+ * ovirt_proxy_add_header:
+ * @proxy: a #OvirtProxy
+ * @header: name of the header to add to each request
+ * @value: value of the header to add to each request
+ *
+ * Add a http header called @header with the value @value to each oVirt REST
+ * API call. If a header with this name already exists, the new value will
+ * replace the old. If @value is NULL then the header will be removed.
+ */
+void ovirt_proxy_add_header(OvirtProxy *proxy, const char *header, const char *value)
+{
+    g_return_if_fail(OVIRT_IS_PROXY(proxy));
+
+    if (value != NULL) {
+        g_hash_table_replace(proxy->priv->additional_headers,
+                             g_strdup(header),
+                             g_strdup(value));
+    } else {
+        g_hash_table_remove(proxy->priv->additional_headers, header);
+    }
+}
+
+
+/**
+ * ovirt_proxy_add_headers:
+ * @proxy: a #OvirtProxy
+ * @...: header name and value pairs, followed by %NULL
+ *
+ * Add the specified http header and value pairs to @proxy. These headers will
+ * be sent with each oVirt REST API call. If a header already exists, the new
+ * value will replace the old.
+ */
+void ovirt_proxy_add_headers(OvirtProxy *proxy, ...)
+{
+    va_list headers;
+
+    g_return_if_fail(OVIRT_IS_PROXY(proxy));
+
+    va_start(headers, proxy);
+    ovirt_proxy_add_headers_from_valist(proxy, headers);
+    va_end(headers);
+}
+
+
+/**
+ * ovirt_proxy_add_headers_from_valist:
+ * @proxy: a #OvirtProxy
+ * @headers: header name and value pairs
+ *
+ * Add the specified http header and value pairs to @proxy. These headers will
+ * be sent with each oVirt REST API call. If a header already exists, the new
+ * value will replace the old.
+ */
+void ovirt_proxy_add_headers_from_valist(OvirtProxy *proxy, va_list headers)
+{
+    const char *header = NULL;
+    const char *value;
+
+    g_return_if_fail(OVIRT_IS_PROXY(proxy));
+
+    header = va_arg(headers, const char *);
+    while (header != NULL) {
+        value = va_arg(headers, const char *);
+        ovirt_proxy_add_header(proxy, header, value);
+        header = va_arg(headers, const char *);
+    }
+}
+
+
+void ovirt_proxy_append_additional_headers(OvirtProxy *proxy,
+                                           RestProxyCall *call)
+{
+    GHashTableIter iter;
+    gpointer key;
+    gpointer value;
+
+    g_return_if_fail(OVIRT_IS_PROXY(proxy));
+    g_return_if_fail(REST_IS_PROXY_CALL(call));
+
+    g_hash_table_iter_init(&iter, proxy->priv->additional_headers);
+    while (g_hash_table_iter_next (&iter, &key, &value)) {
+        rest_proxy_call_add_header(call, key, value);
+    }
+}
+
+
 static void ovirt_proxy_set_api_from_xml(OvirtProxy *proxy,
                                          RestXmlNode *node,
                                          GError **error)
 {
+    OvirtCollection *vms;
+
     if (proxy->priv->api != NULL) {
         g_object_unref(G_OBJECT(proxy->priv->api));
     }
     proxy->priv->api = ovirt_api_new_from_xml(node, error);
 
+    vms = ovirt_api_get_vms(proxy->priv->api);
+    g_return_if_fail(vms != NULL);
+    g_signal_connect(G_OBJECT(vms), "notify::resources",
+                     (GCallback)vm_collection_changed, proxy);
 }
 
 
@@ -1021,4 +1282,46 @@ ovirt_proxy_fetch_api_finish(OvirtProxy *proxy,
         return NULL;
 
     return proxy->priv->api;
+}
+
+
+/**
+ * ovirt_proxy_get_api:
+ *
+ * Gets the api entry point to access remote oVirt resources and collections.
+ * This method does not initiate any network activity, the remote API entry point
+ * must have been fetched with ovirt_proxy_fetch_api() or
+ * ovirt_proxy_fetch_api_async() before calling this function.
+ *
+ * Return value: (transfer none): an #OvirtApi instance used to interact with
+ * oVirt REST API.
+ */
+OvirtApi *
+ovirt_proxy_get_api(OvirtProxy *proxy)
+{
+    return proxy->priv->api;
+}
+
+
+GList *ovirt_proxy_get_vms_internal(OvirtProxy *proxy)
+{
+    OvirtApi *api;
+    OvirtCollection *vm_collection;
+    GHashTable *vms;
+
+    g_return_val_if_fail(OVIRT_IS_PROXY(proxy), NULL);
+
+    api = ovirt_proxy_get_api(proxy);
+    if (api == NULL)
+        return NULL;
+
+    vm_collection = ovirt_api_get_vms(api);
+    if (vm_collection == NULL)
+        return NULL;
+
+    vms = ovirt_collection_get_resources(vm_collection);
+    if (vms == NULL)
+        return NULL;
+
+    return g_hash_table_get_values(vms);
 }

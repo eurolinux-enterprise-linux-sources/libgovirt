@@ -32,13 +32,18 @@
 G_BEGIN_DECLS
 
 struct _OvirtProxyPrivate {
-    GHashTable *vms;
     char *tmp_ca_file;
+    GByteArray *display_ca;
     gboolean admin_mode;
     OvirtApi *api;
     char *jsessionid;
-    SoupCookieJar *cookie_jar;
+    SoupCookie *jsessionid_cookie;
+    char *sso_token;
 
+    SoupCookieJar *cookie_jar;
+    GHashTable *additional_headers;
+
+    gboolean setting_ca_file;
     gulong ssl_ca_file_changed_id;
 };
 
@@ -68,6 +73,11 @@ void ovirt_rest_call_async(OvirtRestCall *call,
                            gpointer user_data,
                            GDestroyNotify destroy_func);
 gboolean ovirt_rest_call_finish(GAsyncResult *result, GError **err);
+
+/* Work around G_GNUC_DEPRECATED attribute on ovirt_proxy_get_vms() */
+GList *ovirt_proxy_get_vms_internal(OvirtProxy *proxy);
+void ovirt_proxy_append_additional_headers(OvirtProxy *proxy,
+                                           RestProxyCall *call);
 
 G_END_DECLS
 

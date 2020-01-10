@@ -16,51 +16,44 @@
 
 Summary: A GObject library for interacting with oVirt REST API
 Name: libgovirt
-Version: 0.3.3
-Release: 6%{?dist}%{?extra_release}
+Version: 0.3.4
+Release: 1%{?dist}%{?extra_release}
 License: LGPLv2+
 Group: Development/Libraries
 Source: http://ftp.gnome.org/pub/GNOME/sources/libgovirt/0.3/%{name}-%{version}.tar.xz
 URL: http://people.freedesktop.org/~teuf/govirt/
-Patch0001: 0001-collection-unref-the-resource-instead-of-the-resourc.patch
-Patch0002: 0002-proxy-Document-OvirtProxy-properties.patch
-Patch0003: 0003-proxy-Readd-additional-header-API.patch
-Patch0004: 0004-proxy-Add-OvirtProxy-sso-token.patch
-Patch0005: 0005-proxy-Remove-jsessionid-cookie-when-its-value-is-NUL.patch
-Patch0006: 0006-proxy-Only-set-Prefer-persistent-auth-with-jsession-.patch
-Patch0007: 0007-proxy-Fix-persistent-session-with-oVirt-3.6.patch
-Patch0008: 0008-Force-use-of-v3-REST-API.patch
-Patch0009: 0009-New-storage-format-added-in-oVirt-4.1.patch
-Patch0010: 0010-proxy-Fix-bug-in-cancelled-disconnection-after-async.patch
-Patch0011: 0011-proxy-Hold-reference-to-cancellable-object.patch
-Patch0012: 0012-proxy-Check-if-operation-is-cancelled-before-disconn.patch
-Patch0013: 0013-storage-domain-Factor-out-property-value-setting-fro.patch
-Patch0014: 0014-storage-domain-use-explicit-initialization-of-struct.patch
-Patch0015: 0015-storage-domain-Move-out-ovirt_resource_parse_xml-to-.patch
-Patch0016: 0016-utils-Remove-unused-function-ovirt_rest_xml_node_get.patch
-Patch0017: 0017-utils-Rename-ovirt_rest_xml_node_get_content_va-to-o.patch
-Patch0018: 0018-utils-Retrieve-node-attributes-in-ovirt_resource_par.patch
-Patch0019: 0019-utils-Support-G_TYPE_STRING-in-_set_property_value_f.patch
-Patch0020: 0020-utils-Support-G_TYPE_STRV-in-_set_property_value_fro.patch
-Patch0021: 0021-Introduce-auxiliary-function-ovirt_sub_collection_ne.patch
-Patch0022: 0022-New-API-functions-to-enable-search-queries-of-collec.patch
-Patch0023: 0023-Introduce-ovirt_resource_new-functions.patch
-Patch0024: 0024-Use-ovirt_resource_new-functions-instead-of-g_initab.patch
-Patch0025: 0025-Move-resource-type-definitions-to-ovirt-types.h.patch
-Patch0026: 0026-Initial-support-for-hosts.patch
-Patch0027: 0027-Initial-support-for-clusters.patch
-Patch0028: 0028-Initial-support-for-data-centers.patch
-Patch0029: 0029-vm-Introduce-ovirt_vm_get_host.patch
-Patch0030: 0030-vm-Introduce-ovirt_vm_get_cluster.patch
-Patch0031: 0031-host-Introduce-ovirt_host_get_cluster.patch
-Patch0032: 0032-cluster-Introduce-ovirt_cluster_get_data_center.patch
-Patch0033: 0033-storage-domain-Retrieve-data-center-ids.patch
-Patch0034: 0034-Add-missing-include-in-govirt.h.patch
-Patch0035: 0035-resource-Fix-ovirt_resource_rest_call_sync-return-va.patch
-Patch0036: 0036-resource-Fix-ovirt_resource_rest_call_sync-crash-on-.patch
-Patch0037: 0037-resource-Fix-ovirt_resource_init_from_xml_real-preco.patch
-Patch0038: 0038-resource-Update-xml-node-in-ovirt_resource_init_from.patch
-Patch0039: 0039-utils-Drop-type-member-from-OvirtXmlElement-struct.patch
+Patch01: 0001-proxy-Fix-persistent-session-with-oVirt-3.6.patch
+Patch02: 0002-Force-use-of-v3-REST-API.patch
+Patch03: 0003-New-storage-format-added-in-oVirt-4.1.patch
+Patch04: 0004-proxy-Hold-reference-to-cancellable-object.patch
+Patch05: 0005-proxy-Check-if-operation-is-cancelled-before-disconn.patch
+Patch06: 0006-storage-domain-Factor-out-property-value-setting-fro.patch
+Patch07: 0007-storage-domain-use-explicit-initialization-of-struct.patch
+Patch08: 0008-storage-domain-Move-out-ovirt_resource_parse_xml-to-.patch
+Patch09: 0009-utils-Remove-unused-function-ovirt_rest_xml_node_get.patch
+Patch10: 0010-utils-Rename-ovirt_rest_xml_node_get_content_va-to-o.patch
+Patch11: 0011-utils-Retrieve-node-attributes-in-ovirt_resource_par.patch
+Patch12: 0012-utils-Support-G_TYPE_STRING-in-_set_property_value_f.patch
+Patch13: 0013-utils-Support-G_TYPE_STRV-in-_set_property_value_fro.patch
+Patch14: 0014-Introduce-auxiliary-function-ovirt_sub_collection_ne.patch
+Patch15: 0015-New-API-functions-to-enable-search-queries-of-collec.patch
+Patch16: 0016-Introduce-ovirt_resource_new-functions.patch
+Patch17: 0017-Use-ovirt_resource_new-functions-instead-of-g_initab.patch
+Patch18: 0018-Move-resource-type-definitions-to-ovirt-types.h.patch
+Patch19: 0019-Initial-support-for-hosts.patch
+Patch20: 0020-Initial-support-for-clusters.patch
+Patch21: 0021-Initial-support-for-data-centers.patch
+Patch22: 0022-vm-Introduce-ovirt_vm_get_host.patch
+Patch23: 0023-vm-Introduce-ovirt_vm_get_cluster.patch
+Patch24: 0024-host-Introduce-ovirt_host_get_cluster.patch
+Patch25: 0025-cluster-Introduce-ovirt_cluster_get_data_center.patch
+Patch26: 0026-storage-domain-Retrieve-data-center-ids.patch
+Patch27: 0027-Add-missing-include-in-govirt.h.patch
+Patch28: 0028-resource-Fix-ovirt_resource_rest_call_sync-return-va.patch
+Patch29: 0029-resource-Fix-ovirt_resource_rest_call_sync-crash-on-.patch
+Patch30: 0030-resource-Fix-ovirt_resource_init_from_xml_real-preco.patch
+Patch31: 0031-resource-Update-xml-node-in-ovirt_resource_init_from.patch
+Patch32: 0032-utils-Drop-type-member-from-OvirtXmlElement-struct.patch
 
 %if 0%{?enable_autotools}
 BuildRequires: autoconf
@@ -71,6 +64,8 @@ BuildRequires: libtool
 
 BuildRequires: pkgconfig(glib-2.0)
 BuildRequires: rest-devel >= 0.7.92
+# needed for make check to complete successfully
+BuildRequires: dconf
 
 BuildRequires: intltool
 %if %{with_gir}
@@ -144,6 +139,11 @@ make check
 %endif
 
 %changelog
+* Fri Jun 08 2018 Christophe Fergeau <cfergeau@redhat.com> - 0.3.4-1
+- Rebase to latest 0.3.4 upstream release. Still quite a few patches as
+  there was no 0.3.5 release yet
+  Resolves: rhbz#1584266
+
 * Mon Oct 02 2017 Eduardo Lima (Etrunko) <etrunko@redhat.com> - 0.3.3-6
 - Add support for Hosts, Clusters and Data Centers
   Resolves: rhbz#1428401

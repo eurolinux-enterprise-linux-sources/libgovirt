@@ -1,0 +1,35 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: "Eduardo Lima (Etrunko)" <etrunko@redhat.com>
+Date: Thu, 2 Feb 2017 15:11:42 -0200
+Subject: [PATCH] proxy: Hold reference to cancellable object
+
+Being an asynchronous operation, there is no guarantee that the object
+is valid by the time of the cleanup, so we hold a reference to it to
+ensure it.
+
+Signed-off-by: Eduardo Lima (Etrunko) <etrunko@redhat.com>
+---
+ govirt/ovirt-proxy.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/govirt/ovirt-proxy.c b/govirt/ovirt-proxy.c
+index efe3284..2b690b6 100644
+--- a/govirt/ovirt-proxy.c
++++ b/govirt/ovirt-proxy.c
+@@ -220,6 +220,7 @@ static void ovirt_proxy_call_async_data_free(OvirtProxyCallAsyncData *data)
+         if ((data->cancellable != NULL) && (data->cancellable_cb_id != 0)) {
+             g_cancellable_disconnect(data->cancellable, data->cancellable_cb_id);
+         }
++        g_clear_object(&data->cancellable);
+         g_slice_free(OvirtProxyCallAsyncData, data);
+ }
+ 
+@@ -284,7 +285,7 @@ void ovirt_rest_call_async(OvirtRestCall *call,
+     data->call_user_data = user_data;
+     data->destroy_call_data = destroy_func;
+     if (cancellable != NULL) {
+-        data->cancellable = cancellable;
++        data->cancellable = g_object_ref(cancellable);
+         data->cancellable_cb_id = g_cancellable_connect(cancellable,
+                                                         G_CALLBACK (call_async_cancelled_cb),
+                                                         call, NULL);

@@ -1,0 +1,452 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: "Eduardo Lima (Etrunko)" <etrunko@redhat.com>
+Date: Tue, 11 Apr 2017 21:53:26 -0300
+Subject: [PATCH] Initial support for data centers
+
+For this higher level object, the list of clusters and storage domains
+associated with it are stored.
+
+Signed-off-by: Eduardo Lima (Etrunko) <etrunko@redhat.com>
+---
+ govirt/Makefile.am                 |   3 +
+ govirt/govirt-private.h            |   1 +
+ govirt/govirt.sym                  |   7 ++
+ govirt/ovirt-api.c                 |  47 ++++++++++
+ govirt/ovirt-api.h                 |   2 +
+ govirt/ovirt-data-center-private.h |  37 ++++++++
+ govirt/ovirt-data-center.c         | 144 +++++++++++++++++++++++++++++
+ govirt/ovirt-data-center.h         |  67 ++++++++++++++
+ govirt/ovirt-types.h               |   1 +
+ 9 files changed, 309 insertions(+)
+ create mode 100644 govirt/ovirt-data-center-private.h
+ create mode 100644 govirt/ovirt-data-center.c
+ create mode 100644 govirt/ovirt-data-center.h
+
+diff --git a/govirt/Makefile.am b/govirt/Makefile.am
+index cf6b858..9bf0eba 100644
+--- a/govirt/Makefile.am
++++ b/govirt/Makefile.am
+@@ -21,6 +21,7 @@ libgovirt_la_HEADERS =						\
+ 	ovirt-cdrom.h						\
+ 	ovirt-cluster.h						\
+ 	ovirt-collection.h					\
++	ovirt-data-center.h					\
+ 	ovirt-error.h						\
+ 	ovirt-host.h						\
+ 	ovirt-options.h						\
+@@ -41,6 +42,7 @@ noinst_HEADERS =						\
+ 	ovirt-api-private.h					\
+ 	ovirt-cluster-private.h					\
+ 	ovirt-collection-private.h				\
++	ovirt-data-center-private.h				\
+ 	ovirt-host-private.h					\
+ 	ovirt-proxy-private.h					\
+ 	ovirt-resource-private.h				\
+@@ -58,6 +60,7 @@ libgovirt_la_SOURCES =						\
+ 	ovirt-cdrom.c						\
+ 	ovirt-cluster.c						\
+ 	ovirt-collection.c					\
++	ovirt-data-center.c					\
+ 	ovirt-error.c						\
+ 	ovirt-host.c						\
+ 	ovirt-options.c						\
+diff --git a/govirt/govirt-private.h b/govirt/govirt-private.h
+index d466f7a..cd98b5b 100644
+--- a/govirt/govirt-private.h
++++ b/govirt/govirt-private.h
+@@ -26,6 +26,7 @@
+ #include <govirt/ovirt-api-private.h>
+ #include <govirt/ovirt-cluster-private.h>
+ #include <govirt/ovirt-collection-private.h>
++#include <govirt/ovirt-data-center-private.h>
+ #include <govirt/ovirt-enum-types-private.h>
+ #include <govirt/ovirt-host-private.h>
+ #include <govirt/ovirt-proxy-private.h>
+diff --git a/govirt/govirt.sym b/govirt/govirt.sym
+index 56e1d66..b22af76 100644
+--- a/govirt/govirt.sym
++++ b/govirt/govirt.sym
+@@ -111,9 +111,11 @@ GOVIRT_0.3.2 {
+         ovirt_api_search_vm_pools;
+ 
+         ovirt_api_get_clusters;
++        ovirt_api_get_data_centers;
+         ovirt_api_get_hosts;
+ 
+         ovirt_api_search_clusters;
++        ovirt_api_search_data_centers;
+         ovirt_api_search_hosts;
+         ovirt_api_search_storage_domains;
+         ovirt_api_search_vms;
+@@ -123,6 +125,11 @@ GOVIRT_0.3.2 {
+         ovirt_cluster_get_hosts;
+         ovirt_cluster_new;
+ 
++        ovirt_data_center_get_clusters;
++        ovirt_data_center_get_storage_domains;
++        ovirt_data_center_get_type;
++        ovirt_data_center_new;
++
+         ovirt_host_get_type;
+         ovirt_host_get_vms;
+         ovirt_host_new;
+diff --git a/govirt/ovirt-api.c b/govirt/ovirt-api.c
+index 14c6c5a..d78ba7e 100644
+--- a/govirt/ovirt-api.c
++++ b/govirt/ovirt-api.c
+@@ -42,6 +42,7 @@
+ 
+ struct _OvirtApiPrivate {
+     OvirtCollection *clusters;
++    OvirtCollection *data_centers;
+     OvirtCollection *hosts;
+     OvirtCollection *storage_domains;
+     OvirtCollection *vms;
+@@ -76,6 +77,7 @@ static void ovirt_api_dispose(GObject *object)
+     OvirtApi *api = OVIRT_API(object);
+ 
+     g_clear_object(&api->priv->clusters);
++    g_clear_object(&api->priv->data_centers);
+     g_clear_object(&api->priv->hosts);
+     g_clear_object(&api->priv->storage_domains);
+     g_clear_object(&api->priv->vms);
+@@ -339,3 +341,48 @@ OvirtCollection *ovirt_api_search_clusters(OvirtApi *api, const char *query)
+                                                          "cluster",
+                                                          query);
+ }
++
++
++/**
++ * ovirt_api_get_data_centers:
++ * @api: a #OvirtApi
++ *
++ * This method does not initiate any network activity, the collection
++ * must be fetched with ovirt_collection_fetch() before having up-to-date
++ * content.
++ *
++ * Return value: (transfer none):
++ */
++OvirtCollection *ovirt_api_get_data_centers(OvirtApi *api)
++{
++    g_return_val_if_fail(OVIRT_IS_API(api), NULL);
++
++    if (api->priv->data_centers == NULL)
++        api->priv->data_centers = ovirt_sub_collection_new_from_resource(OVIRT_RESOURCE(api),
++                                                                         "datacenters",
++                                                                         "data_centers",
++                                                                         OVIRT_TYPE_DATA_CENTER,
++                                                                         "data_center");
++
++    return api->priv->data_centers;
++}
++
++
++/**
++ * ovirt_api_search_data_centers:
++ * @api: a #OvirtApi
++ * @query: search query
++ *
++ * Return value: (transfer none):
++ */
++OvirtCollection *ovirt_api_search_data_centers(OvirtApi *api, const char *query)
++{
++    g_return_val_if_fail(OVIRT_IS_API(api), NULL);
++
++    return ovirt_sub_collection_new_from_resource_search(OVIRT_RESOURCE(api),
++                                                         "datacenters/search",
++                                                         "data_centers",
++                                                         OVIRT_TYPE_DATA_CENTER,
++                                                         "data_center",
++                                                         query);
++}
+diff --git a/govirt/ovirt-api.h b/govirt/ovirt-api.h
+index 1b60f35..1448296 100644
+--- a/govirt/ovirt-api.h
++++ b/govirt/ovirt-api.h
+@@ -62,6 +62,8 @@ OvirtApi *ovirt_api_new(void);
+ 
+ OvirtCollection *ovirt_api_get_clusters(OvirtApi *api);
+ OvirtCollection *ovirt_api_search_clusters(OvirtApi *api, const char *query);
++OvirtCollection *ovirt_api_get_data_centers(OvirtApi *api);
++OvirtCollection *ovirt_api_search_data_centers(OvirtApi *api, const char *query);
+ OvirtCollection *ovirt_api_get_hosts(OvirtApi *api);
+ OvirtCollection *ovirt_api_search_hosts(OvirtApi *api, const char *query);
+ OvirtCollection *ovirt_api_get_storage_domains(OvirtApi *api);
+diff --git a/govirt/ovirt-data-center-private.h b/govirt/ovirt-data-center-private.h
+new file mode 100644
+index 0000000..5839755
+--- /dev/null
++++ b/govirt/ovirt-data-center-private.h
+@@ -0,0 +1,37 @@
++/*
++ * ovirt-data_center-private.h: oVirt data center resource
++ *
++ * Copyright (C) 2017 Red Hat, Inc.
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this library. If not, see
++ * <http://www.gnu.org/licenses/>.
++ *
++ * Author: Eduardo Lima (Etrunko) <etrunko@redhat.com>
++ */
++#ifndef __OVIRT_DATA_CENTER_PRIVATE_H__
++#define __OVIRT_DATA_CENTER_PRIVATE_H__
++
++#include <ovirt-data-center.h>
++#include <rest/rest-xml-node.h>
++
++G_BEGIN_DECLS
++
++OvirtDataCenter *ovirt_data_center_new_from_id(const char *id,
++                                               const char *href);
++OvirtDataCenter *ovirt_data_center_new_from_xml(RestXmlNode *node,
++                                                GError **error);
++
++G_END_DECLS
++
++#endif /* __OVIRT_DATA_CENTER_PRIVATE_H__ */
+diff --git a/govirt/ovirt-data-center.c b/govirt/ovirt-data-center.c
+new file mode 100644
+index 0000000..577a31f
+--- /dev/null
++++ b/govirt/ovirt-data-center.c
+@@ -0,0 +1,144 @@
++/*
++ * ovirt-data_center.c: oVirt data center handling
++ *
++ * Copyright (C) 2017 Red Hat, Inc.
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this library. If not, see
++ * <http://www.gnu.org/licenses/>.
++ *
++ * Author: Eduardo Lima (Etrunko) <etrunko@redhat.com>
++ */
++
++#include <config.h>
++#include "ovirt-enum-types.h"
++#include "ovirt-data-center.h"
++#include "govirt-private.h"
++
++#define OVIRT_DATA_CENTER_GET_PRIVATE(obj)                         \
++        (G_TYPE_INSTANCE_GET_PRIVATE((obj), OVIRT_TYPE_DATA_CENTER, OvirtDataCenterPrivate))
++
++struct _OvirtDataCenterPrivate {
++    OvirtCollection *clusters;
++    OvirtCollection *storage_domains;
++};
++
++G_DEFINE_TYPE(OvirtDataCenter, ovirt_data_center, OVIRT_TYPE_RESOURCE);
++
++static void
++ovirt_data_center_dispose(GObject *obj)
++{
++    OvirtDataCenter *data_center = OVIRT_DATA_CENTER(obj);
++
++    g_clear_object(&data_center->priv->clusters);
++    g_clear_object(&data_center->priv->storage_domains);
++
++    G_OBJECT_CLASS(ovirt_data_center_parent_class)->dispose(obj);
++}
++
++static void ovirt_data_center_class_init(OvirtDataCenterClass *klass)
++{
++    GObjectClass *object_class = G_OBJECT_CLASS(klass);
++
++    g_type_class_add_private(klass, sizeof(OvirtDataCenterPrivate));
++
++    object_class->dispose = ovirt_data_center_dispose;
++}
++
++
++static void ovirt_data_center_init(OvirtDataCenter *data_center)
++{
++    data_center->priv = OVIRT_DATA_CENTER_GET_PRIVATE(data_center);
++}
++
++G_GNUC_INTERNAL
++OvirtDataCenter *ovirt_data_center_new_from_id(const char *id,
++                                               const char *href)
++{
++    OvirtResource *data_center = ovirt_resource_new_from_id(OVIRT_TYPE_DATA_CENTER, id, href);
++    return OVIRT_DATA_CENTER(data_center);
++}
++
++G_GNUC_INTERNAL
++OvirtDataCenter *ovirt_data_center_new_from_xml(RestXmlNode *node,
++                                                GError **error)
++{
++    OvirtResource *data_center = ovirt_resource_new_from_xml(OVIRT_TYPE_DATA_CENTER, node, error);
++    return OVIRT_DATA_CENTER(data_center);
++}
++
++OvirtDataCenter *ovirt_data_center_new(void)
++{
++    OvirtResource *data_center = ovirt_resource_new(OVIRT_TYPE_DATA_CENTER);
++    return OVIRT_DATA_CENTER(data_center);
++}
++
++
++/**
++ * ovirt_data_center_get_clusters:
++ * @data_center: a #OvirtDataCenter
++ *
++ * Gets a #OvirtCollection representing the list of remote clusters from a
++ * data center object. This method does not initiate any network
++ * activity, the remote cluster list must be then be fetched using
++ * ovirt_collection_fetch() or ovirt_collection_fetch_async().
++ *
++ * Return value: (transfer none): a #OvirtCollection representing the list
++ * of clusters associated with @data_center.
++ */
++OvirtCollection *ovirt_data_center_get_clusters(OvirtDataCenter *data_center)
++{
++    g_return_val_if_fail(OVIRT_IS_DATA_CENTER(data_center), NULL);
++
++    if (data_center->priv->clusters == NULL) {
++        OvirtCollection *collection;
++        collection = ovirt_sub_collection_new_from_resource(OVIRT_RESOURCE(data_center),
++                                                            "clusters",
++                                                            "clusters",
++                                                            OVIRT_TYPE_CLUSTER,
++                                                            "cluster");
++        data_center->priv->clusters = collection;
++    }
++
++    return data_center->priv->clusters;
++}
++
++
++/**
++ * ovirt_data_center_get_storage_domains:
++ * @data_center: a #OvirtDataCenter
++ *
++ * Gets a #OvirtCollection representing the list of remote storage domains from a
++ * data center object. This method does not initiate any network
++ * activity, the remote storage domain list must be then be fetched using
++ * ovirt_collection_fetch() or ovirt_collection_fetch_async().
++ *
++ * Return value: (transfer none): a #OvirtCollection representing the list
++ * of storage_domains associated with @data_center.
++ */
++OvirtCollection *ovirt_data_center_get_storage_domains(OvirtDataCenter *data_center)
++{
++    g_return_val_if_fail(OVIRT_IS_DATA_CENTER(data_center), NULL);
++
++    if (data_center->priv->storage_domains == NULL) {
++        OvirtCollection *collection;
++        collection = ovirt_sub_collection_new_from_resource(OVIRT_RESOURCE(data_center),
++                                                            "storagedomains",
++                                                            "storage_domains",
++                                                            OVIRT_TYPE_STORAGE_DOMAIN,
++                                                            "storage_domain");
++        data_center->priv->storage_domains = collection;
++    }
++
++    return data_center->priv->storage_domains;
++}
+diff --git a/govirt/ovirt-data-center.h b/govirt/ovirt-data-center.h
+new file mode 100644
+index 0000000..1bad06f
+--- /dev/null
++++ b/govirt/ovirt-data-center.h
+@@ -0,0 +1,67 @@
++/*
++ * ovirt-data_center.h: oVirt data center resource
++ *
++ * Copyright (C) 2017 Red Hat, Inc.
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this library. If not, see
++ * <http://www.gnu.org/licenses/>.
++ *
++ * Author: Eduardo Lima (Etrunko) <etrunko@redhat.com>
++ */
++#ifndef __OVIRT_DATA_CENTER_H__
++#define __OVIRT_DATA_CENTER_H__
++
++#include <gio/gio.h>
++#include <glib-object.h>
++#include <govirt/ovirt-collection.h>
++#include <govirt/ovirt-resource.h>
++#include <govirt/ovirt-types.h>
++
++G_BEGIN_DECLS
++
++#define OVIRT_TYPE_DATA_CENTER            (ovirt_data_center_get_type ())
++#define OVIRT_DATA_CENTER(obj)            (G_TYPE_CHECK_INSTANCE_CAST ((obj), OVIRT_TYPE_DATA_CENTER, OvirtDataCenter))
++#define OVIRT_DATA_CENTER_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST ((klass), OVIRT_TYPE_DATA_CENTER, OvirtDataCenterClass))
++#define OVIRT_IS_DATA_CENTER(obj)         (G_TYPE_CHECK_INSTANCE_TYPE ((obj), OVIRT_TYPE_DATA_CENTER))
++#define OVIRT_IS_DATA_CENTER_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE ((klass), OVIRT_TYPE_DATA_CENTER))
++#define OVIRT_DATA_CENTER_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj), OVIRT_TYPE_DATA_CENTER, OvirtDataCenterClass))
++
++typedef struct _OvirtDataCenterPrivate OvirtDataCenterPrivate;
++typedef struct _OvirtDataCenterClass OvirtDataCenterClass;
++
++struct _OvirtDataCenter
++{
++    OvirtResource parent;
++
++    OvirtDataCenterPrivate *priv;
++
++    /* Do not add fields to this struct */
++};
++
++struct _OvirtDataCenterClass
++{
++    OvirtResourceClass parent_class;
++
++    gpointer padding[20];
++};
++
++GType ovirt_data_center_get_type(void);
++
++OvirtDataCenter *ovirt_data_center_new(void);
++OvirtCollection *ovirt_data_center_get_clusters(OvirtDataCenter *data_center);
++OvirtCollection *ovirt_data_center_get_storage_domains(OvirtDataCenter *data_center);
++
++G_END_DECLS
++
++#endif /* __OVIRT_DATA_CENTER_H__ */
+diff --git a/govirt/ovirt-types.h b/govirt/ovirt-types.h
+index e2f196e..eb85fd6 100644
+--- a/govirt/ovirt-types.h
++++ b/govirt/ovirt-types.h
+@@ -29,6 +29,7 @@ typedef struct _OvirtApi OvirtApi;
+ typedef struct _OvirtCdrom OvirtCdrom;
+ typedef struct _OvirtCluster OvirtCluster;
+ typedef struct _OvirtCollection OvirtCollection;
++typedef struct _OvirtDataCenter OvirtDataCenter;
+ typedef struct _OvirtHost OvirtHost;
+ typedef struct _OvirtProxy OvirtProxy;
+ typedef struct _OvirtStorageDomain OvirtStorageDomain;

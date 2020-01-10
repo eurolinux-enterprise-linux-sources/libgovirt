@@ -4,7 +4,7 @@ AC_PREREQ(2.63)
 
 m4_define([govirt_major_version], [0])
 m4_define([govirt_minor_version], [3])
-m4_define([govirt_micro_version], [3])
+m4_define([govirt_micro_version], [4])
 m4_define([govirt_version],
           [govirt_major_version.govirt_minor_version.govirt_micro_version])
 
@@ -96,7 +96,7 @@ AC_SUBST(WARNINGFLAGS_C)
 dnl ---------------------------------------------------------------------------
 dnl - Check library dependencies
 dnl ---------------------------------------------------------------------------
-PKG_CHECK_MODULES([GLIB], [gobject-2.0 gio-2.0 >= 2.26.0])
+PKG_CHECK_MODULES([GLIB], [gobject-2.0 gio-2.0 gthread-2.0 >= 2.26.0])
 
 # Setup GLIB_MKENUMS to use glib-mkenums even if GLib is uninstalled.
 GLIB_MKENUMS=`$PKG_CONFIG --variable=glib_mkenums glib-2.0`
@@ -123,6 +123,7 @@ examples/Makefile
 govirt/govirt-1.0.pc
 govirt/Makefile
 po/Makefile.in
+tests/Makefile
 ])
 AC_OUTPUT
 

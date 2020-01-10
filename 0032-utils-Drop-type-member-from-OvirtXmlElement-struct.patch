@@ -1,0 +1,151 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: "Eduardo Lima (Etrunko)" <etrunko@redhat.com>
+Date: Thu, 18 May 2017 17:21:10 -0300
+Subject: [PATCH] utils: Drop 'type' member from OvirtXmlElement struct
+
+Instead of passing the type, it is possible to get it using by calling
+g_object_class_find_property(). All users have been updated accordingly.
+
+Signed-off-by: Eduardo Lima (Etrunko) <etrunko@redhat.com>
+---
+ govirt/ovirt-cluster.c        | 2 --
+ govirt/ovirt-host.c           | 2 --
+ govirt/ovirt-storage-domain.c | 8 --------
+ govirt/ovirt-utils.c          | 8 ++++++--
+ govirt/ovirt-utils.h          | 1 -
+ govirt/ovirt-vm.c             | 4 ----
+ 6 files changed, 6 insertions(+), 19 deletions(-)
+
+diff --git a/govirt/ovirt-cluster.c b/govirt/ovirt-cluster.c
+index 4aaf6b1..ae25d63 100644
+--- a/govirt/ovirt-cluster.c
++++ b/govirt/ovirt-cluster.c
+@@ -115,12 +115,10 @@ static gboolean ovirt_cluster_init_from_xml(OvirtResource *resource,
+     OvirtResourceClass *parent_class;
+     OvirtXmlElement cluster_elements[] = {
+         { .prop_name = "data-center-href",
+-          .type = G_TYPE_STRING,
+           .xml_path = "data_center",
+           .xml_attr = "href",
+         },
+         { .prop_name = "data-center-id",
+-          .type = G_TYPE_STRING,
+           .xml_path = "data_center",
+           .xml_attr = "id",
+         },
+diff --git a/govirt/ovirt-host.c b/govirt/ovirt-host.c
+index 191b360..1570cba 100644
+--- a/govirt/ovirt-host.c
++++ b/govirt/ovirt-host.c
+@@ -116,12 +116,10 @@ static gboolean ovirt_host_init_from_xml(OvirtResource *resource,
+     OvirtResourceClass *parent_class;
+     OvirtXmlElement host_elements[] = {
+         { .prop_name = "cluster-href",
+-          .type = G_TYPE_STRING,
+           .xml_path = "cluster",
+           .xml_attr = "href",
+         },
+         { .prop_name = "cluster-id",
+-          .type = G_TYPE_STRING,
+           .xml_path = "cluster",
+           .xml_attr = "id",
+         },
+diff --git a/govirt/ovirt-storage-domain.c b/govirt/ovirt-storage-domain.c
+index 718c1d2..a9078f4 100644
+--- a/govirt/ovirt-storage-domain.c
++++ b/govirt/ovirt-storage-domain.c
+@@ -153,35 +153,27 @@ static gboolean ovirt_storage_domain_init_from_xml(OvirtResource *resource,
+     OvirtResourceClass *parent_class;
+     OvirtXmlElement storage_domain_elements[] = {
+         { .prop_name = "type",
+-          .type = OVIRT_TYPE_STORAGE_DOMAIN_TYPE,
+           .xml_path = "type",
+         },
+         { .prop_name = "master",
+-          .type = G_TYPE_BOOLEAN,
+           .xml_path = "master",
+         },
+         { .prop_name = "available",
+-          .type = G_TYPE_UINT64,
+           .xml_path = "available",
+         },
+         { .prop_name = "used",
+-          .type = G_TYPE_UINT64,
+           .xml_path = "used",
+         },
+         { .prop_name = "committed",
+-          .type = G_TYPE_UINT64,
+           .xml_path = "committed",
+         },
+         { .prop_name = "version",
+-          .type = OVIRT_TYPE_STORAGE_DOMAIN_FORMAT_VERSION,
+           .xml_path = "storage_format",
+         },
+         { .prop_name = "state",
+-          .type = OVIRT_TYPE_STORAGE_DOMAIN_STATE,
+           .xml_path = "status/state",
+         },
+         { .prop_name = "data-center-ids",
+-          .type = G_TYPE_STRV,
+           .xml_path = "data_centers",
+           .xml_attr = "id",
+         },
+diff --git a/govirt/ovirt-utils.c b/govirt/ovirt-utils.c
+index 1898862..501acb9 100644
+--- a/govirt/ovirt-utils.c
++++ b/govirt/ovirt-utils.c
+@@ -207,9 +207,13 @@ ovirt_rest_xml_node_parse(RestXmlNode *node,
+ 
+     for (;elements->xml_path != NULL; elements++) {
+         GValue value = { 0, };
++        GParamSpec *prop;
+ 
+-        g_value_init(&value, elements->type);
+-        if (_set_property_value_from_type(&value, elements->type, elements->xml_path, elements->xml_attr, node))
++        prop = g_object_class_find_property(G_OBJECT_GET_CLASS(object), elements->prop_name);
++        g_return_val_if_fail(prop != NULL, FALSE);
++
++        g_value_init(&value, prop->value_type);
++        if (_set_property_value_from_type(&value, prop->value_type, elements->xml_path, elements->xml_attr, node))
+             g_object_set_property(object, elements->prop_name, &value);
+         g_value_unset(&value);
+     }
+diff --git a/govirt/ovirt-utils.h b/govirt/ovirt-utils.h
+index 545847a..e03f453 100644
+--- a/govirt/ovirt-utils.h
++++ b/govirt/ovirt-utils.h
+@@ -31,7 +31,6 @@ typedef struct _OvirtXmlElement OvirtXmlElement;
+ struct _OvirtXmlElement
+ {
+     const char *prop_name;
+-    GType type;
+     const char *xml_path;
+     const char *xml_attr; /* if NULL, retrieve node content instead of attribute */
+ };
+diff --git a/govirt/ovirt-vm.c b/govirt/ovirt-vm.c
+index 70b6f3a..36ffd35 100644
+--- a/govirt/ovirt-vm.c
++++ b/govirt/ovirt-vm.c
+@@ -184,22 +184,18 @@ static gboolean ovirt_vm_init_from_xml(OvirtResource *resource,
+     OvirtResourceClass *parent_class;
+     OvirtXmlElement vm_elements[] = {
+         { .prop_name = "host-href",
+-          .type = G_TYPE_STRING,
+           .xml_path = "host",
+           .xml_attr = "href",
+         },
+         { .prop_name = "host-id",
+-          .type = G_TYPE_STRING,
+           .xml_path = "host",
+           .xml_attr = "id",
+         },
+         { .prop_name = "cluster-href",
+-          .type = G_TYPE_STRING,
+           .xml_path = "cluster",
+           .xml_attr = "href",
+         },
+         { .prop_name = "cluster-id",
+-          .type = G_TYPE_STRING,
+           .xml_path = "cluster",
+           .xml_attr = "id",
+         },

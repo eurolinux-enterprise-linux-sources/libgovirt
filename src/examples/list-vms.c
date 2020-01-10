@@ -66,6 +66,7 @@ static void dump_vms(OvirtApi *api, OvirtProxy *proxy)
     ovirt_collection_fetch(vms, proxy, &error);
     if (error != NULL) {
         g_debug("failed to fetch VMs: %s", error->message);
+        g_error_free(error);
         return;
     }
 
@@ -84,6 +85,7 @@ static void dump_vm_pools(OvirtApi *api, OvirtProxy *proxy)
     ovirt_collection_fetch(pools, proxy, &error);
     if (error != NULL) {
         g_debug("failed to fetch VM pools: %s", error->message);
+        g_error_free(error);
         return;
     }
 
@@ -97,7 +99,6 @@ int main(int argc, char **argv)
     OvirtApi *api;
     OvirtProxy *proxy = NULL;
     GError *error = NULL;
-    GByteArray *ca_cert = NULL;
 
     g_type_init();
 
@@ -122,7 +123,6 @@ int main(int argc, char **argv)
         g_debug("failed to get CA certificate: %s", error->message);
         goto error;
     }
-    g_object_get(G_OBJECT(proxy), "ca-cert", &ca_cert, NULL);
 
     api = ovirt_proxy_fetch_api(proxy, &error);
     if (error != NULL) {
@@ -136,8 +136,6 @@ int main(int argc, char **argv)
 
 
 error:
-    if (ca_cert != NULL)
-        g_byte_array_unref(ca_cert);
     if (error != NULL)
         g_error_free(error);
     if (proxy != NULL)

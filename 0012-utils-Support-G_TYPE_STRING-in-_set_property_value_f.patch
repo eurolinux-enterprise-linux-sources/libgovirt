@@ -1,0 +1,26 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: "Eduardo Lima (Etrunko)" <etrunko@redhat.com>
+Date: Wed, 10 May 2017 15:46:27 -0300
+Subject: [PATCH] utils: Support G_TYPE_STRING in
+ _set_property_value_from_type()
+
+Signed-off-by: Eduardo Lima (Etrunko) <etrunko@redhat.com>
+---
+ govirt/ovirt-utils.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/govirt/ovirt-utils.c b/govirt/ovirt-utils.c
+index b9b7c15..fafb9ec 100644
+--- a/govirt/ovirt-utils.c
++++ b/govirt/ovirt-utils.c
+@@ -124,6 +124,10 @@ _set_property_value_from_type(GValue *value,
+         g_value_set_boolean(value, bool_value);
+         break;
+     }
++    case G_TYPE_STRING: {
++        g_value_set_string(value, value_str);
++        break;
++    }
+     case G_TYPE_UINT64: {
+         guint64 int64_value = g_ascii_strtoull(value_str, NULL, 0);
+         g_value_set_uint64(value, int64_value);

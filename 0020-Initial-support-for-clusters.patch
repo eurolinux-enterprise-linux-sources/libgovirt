@@ -1,0 +1,519 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: "Eduardo Lima (Etrunko)" <etrunko@redhat.com>
+Date: Tue, 11 Apr 2017 21:51:14 -0300
+Subject: [PATCH] Initial support for clusters
+
+Like the previous commit, at the moment, we only care about the
+information of the data center the cluster is part of, and the list of
+the hosts associated with it.
+
+Signed-off-by: Eduardo Lima (Etrunko) <etrunko@redhat.com>
+---
+ govirt/Makefile.am             |   3 +
+ govirt/govirt-private.h        |   1 +
+ govirt/govirt.sym              |   6 +
+ govirt/ovirt-api.c             |  47 +++++++
+ govirt/ovirt-api.h             |   2 +
+ govirt/ovirt-cluster-private.h |  37 ++++++
+ govirt/ovirt-cluster.c         | 215 +++++++++++++++++++++++++++++++++
+ govirt/ovirt-cluster.h         |  66 ++++++++++
+ govirt/ovirt-types.h           |   1 +
+ 9 files changed, 378 insertions(+)
+ create mode 100644 govirt/ovirt-cluster-private.h
+ create mode 100644 govirt/ovirt-cluster.c
+ create mode 100644 govirt/ovirt-cluster.h
+
+diff --git a/govirt/Makefile.am b/govirt/Makefile.am
+index c62a1d6..cf6b858 100644
+--- a/govirt/Makefile.am
++++ b/govirt/Makefile.am
+@@ -19,6 +19,7 @@ libgovirt_la_HEADERS =						\
+ 	govirt.h						\
+ 	ovirt-api.h						\
+ 	ovirt-cdrom.h						\
++	ovirt-cluster.h						\
+ 	ovirt-collection.h					\
+ 	ovirt-error.h						\
+ 	ovirt-host.h						\
+@@ -38,6 +39,7 @@ noinst_HEADERS =						\
+ 	govirt-private.h					\
+ 	ovirt-action-rest-call.h				\
+ 	ovirt-api-private.h					\
++	ovirt-cluster-private.h					\
+ 	ovirt-collection-private.h				\
+ 	ovirt-host-private.h					\
+ 	ovirt-proxy-private.h					\
+@@ -54,6 +56,7 @@ libgovirt_la_SOURCES =						\
+ 	ovirt-action-rest-call.c				\
+ 	ovirt-api.c						\
+ 	ovirt-cdrom.c						\
++	ovirt-cluster.c						\
+ 	ovirt-collection.c					\
+ 	ovirt-error.c						\
+ 	ovirt-host.c						\
+diff --git a/govirt/govirt-private.h b/govirt/govirt-private.h
+index b51feb3..d466f7a 100644
+--- a/govirt/govirt-private.h
++++ b/govirt/govirt-private.h
+@@ -24,6 +24,7 @@
+ 
+ #include <govirt/ovirt-action-rest-call.h>
+ #include <govirt/ovirt-api-private.h>
++#include <govirt/ovirt-cluster-private.h>
+ #include <govirt/ovirt-collection-private.h>
+ #include <govirt/ovirt-enum-types-private.h>
+ #include <govirt/ovirt-host-private.h>
+diff --git a/govirt/govirt.sym b/govirt/govirt.sym
+index 6dc8159..56e1d66 100644
+--- a/govirt/govirt.sym
++++ b/govirt/govirt.sym
+@@ -110,13 +110,19 @@ GOVIRT_0.3.2 {
+         ovirt_api_search_vms;
+         ovirt_api_search_vm_pools;
+ 
++        ovirt_api_get_clusters;
+         ovirt_api_get_hosts;
+ 
++        ovirt_api_search_clusters;
+         ovirt_api_search_hosts;
+         ovirt_api_search_storage_domains;
+         ovirt_api_search_vms;
+         ovirt_api_search_vm_pools;
+ 
++        ovirt_cluster_get_type;
++        ovirt_cluster_get_hosts;
++        ovirt_cluster_new;
++
+         ovirt_host_get_type;
+         ovirt_host_get_vms;
+         ovirt_host_new;
+diff --git a/govirt/ovirt-api.c b/govirt/ovirt-api.c
+index fef04ba..14c6c5a 100644
+--- a/govirt/ovirt-api.c
++++ b/govirt/ovirt-api.c
+@@ -41,6 +41,7 @@
+ 
+ 
+ struct _OvirtApiPrivate {
++    OvirtCollection *clusters;
+     OvirtCollection *hosts;
+     OvirtCollection *storage_domains;
+     OvirtCollection *vms;
+@@ -74,6 +75,7 @@ static void ovirt_api_dispose(GObject *object)
+ {
+     OvirtApi *api = OVIRT_API(object);
+ 
++    g_clear_object(&api->priv->clusters);
+     g_clear_object(&api->priv->hosts);
+     g_clear_object(&api->priv->storage_domains);
+     g_clear_object(&api->priv->vms);
+@@ -292,3 +294,48 @@ OvirtCollection *ovirt_api_search_hosts(OvirtApi *api, const char *query)
+                                                          "host",
+                                                          query);
+ }
++
++
++/**
++ * ovirt_api_get_clusters:
++ * @api: a #OvirtApi
++ *
++ * This method does not initiate any network activity, the collection
++ * must be fetched with ovirt_collection_fetch() before having up-to-date
++ * content.
++ *
++ * Return value: (transfer none):
++ */
++OvirtCollection *ovirt_api_get_clusters(OvirtApi *api)
++{
++    g_return_val_if_fail(OVIRT_IS_API(api), NULL);
++
++    if (api->priv->clusters == NULL)
++        api->priv->clusters = ovirt_sub_collection_new_from_resource(OVIRT_RESOURCE(api),
++                                                                     "clusters",
++                                                                     "clusters",
++                                                                     OVIRT_TYPE_CLUSTER,
++                                                                     "cluster");
++
++    return api->priv->clusters;
++}
++
++
++/**
++ * ovirt_api_search_clusters:
++ * @api: a #OvirtApi
++ * @query: search query
++ *
++ * Return value: (transfer none):
++ */
++OvirtCollection *ovirt_api_search_clusters(OvirtApi *api, const char *query)
++{
++    g_return_val_if_fail(OVIRT_IS_API(api), NULL);
++
++    return ovirt_sub_collection_new_from_resource_search(OVIRT_RESOURCE(api),
++                                                         "clusters/search",
++                                                         "clusters",
++                                                         OVIRT_TYPE_CLUSTER,
++                                                         "cluster",
++                                                         query);
++}
+diff --git a/govirt/ovirt-api.h b/govirt/ovirt-api.h
+index c46e934..1b60f35 100644
+--- a/govirt/ovirt-api.h
++++ b/govirt/ovirt-api.h
+@@ -60,6 +60,8 @@ struct _OvirtApiClass
+ GType ovirt_api_get_type(void);
+ OvirtApi *ovirt_api_new(void);
+ 
++OvirtCollection *ovirt_api_get_clusters(OvirtApi *api);
++OvirtCollection *ovirt_api_search_clusters(OvirtApi *api, const char *query);
+ OvirtCollection *ovirt_api_get_hosts(OvirtApi *api);
+ OvirtCollection *ovirt_api_search_hosts(OvirtApi *api, const char *query);
+ OvirtCollection *ovirt_api_get_storage_domains(OvirtApi *api);
+diff --git a/govirt/ovirt-cluster-private.h b/govirt/ovirt-cluster-private.h
+new file mode 100644
+index 0000000..1a1817d
+--- /dev/null
++++ b/govirt/ovirt-cluster-private.h
+@@ -0,0 +1,37 @@
++/*
++ * ovirt-cluster-private.h: oVirt cluster resource
++ *
++ * Copyright (C) 2017 Red Hat, Inc.
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this library. If not, see
++ * <http://www.gnu.org/licenses/>.
++ *
++ * Author: Eduardo Lima (Etrunko) <etrunko@redhat.com>
++ */
++#ifndef __OVIRT_CLUSTER_PRIVATE_H__
++#define __OVIRT_CLUSTER_PRIVATE_H__
++
++#include <ovirt-cluster.h>
++#include <rest/rest-xml-node.h>
++
++G_BEGIN_DECLS
++
++OvirtCluster *ovirt_cluster_new_from_id(const char *id,
++                                        const char *href);
++OvirtCluster *ovirt_cluster_new_from_xml(RestXmlNode *node,
++                                         GError **error);
++
++G_END_DECLS
++
++#endif /* __OVIRT_CLUSTER_PRIVATE_H__ */
+diff --git a/govirt/ovirt-cluster.c b/govirt/ovirt-cluster.c
+new file mode 100644
+index 0000000..83b0fa1
+--- /dev/null
++++ b/govirt/ovirt-cluster.c
+@@ -0,0 +1,215 @@
++/*
++ * ovirt-cluster.c: oVirt cluster handling
++ *
++ * Copyright (C) 2017 Red Hat, Inc.
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this library. If not, see
++ * <http://www.gnu.org/licenses/>.
++ *
++ * Author: Eduardo Lima (Etrunko) <etrunko@redhat.com>
++ */
++
++#include <config.h>
++#include "ovirt-enum-types.h"
++#include "ovirt-cluster.h"
++#include "govirt-private.h"
++
++#define OVIRT_CLUSTER_GET_PRIVATE(obj)                         \
++        (G_TYPE_INSTANCE_GET_PRIVATE((obj), OVIRT_TYPE_CLUSTER, OvirtClusterPrivate))
++
++struct _OvirtClusterPrivate {
++    gchar *data_center_href;
++    gchar *data_center_id;
++    OvirtCollection *hosts;
++};
++
++G_DEFINE_TYPE(OvirtCluster, ovirt_cluster, OVIRT_TYPE_RESOURCE);
++
++enum {
++    PROP_0,
++    PROP_DATA_CENTER_HREF,
++    PROP_DATA_CENTER_ID,
++};
++
++static void ovirt_cluster_get_property(GObject *object,
++                                       guint prop_id,
++                                       GValue *value,
++                                       GParamSpec *pspec)
++{
++    OvirtCluster *cluster = OVIRT_CLUSTER(object);
++
++    switch (prop_id) {
++    case PROP_DATA_CENTER_HREF:
++        g_value_set_string(value, cluster->priv->data_center_href);
++        break;
++    case PROP_DATA_CENTER_ID:
++        g_value_set_string(value, cluster->priv->data_center_id);
++        break;
++    default:
++        G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
++    }
++}
++
++static void ovirt_cluster_set_property(GObject *object,
++                                       guint prop_id,
++                                       const GValue *value,
++                                       GParamSpec *pspec)
++{
++    OvirtCluster *cluster = OVIRT_CLUSTER(object);
++
++    switch (prop_id) {
++    case PROP_DATA_CENTER_HREF:
++        g_free(cluster->priv->data_center_href);
++        cluster->priv->data_center_href = g_value_dup_string(value);
++        break;
++    case PROP_DATA_CENTER_ID:
++        g_free(cluster->priv->data_center_id);
++        cluster->priv->data_center_id = g_value_dup_string(value);
++        break;
++    default:
++        G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
++    }
++}
++
++
++static void
++ovirt_cluster_dispose(GObject *obj)
++{
++    OvirtCluster *cluster = OVIRT_CLUSTER(obj);
++
++    g_clear_pointer(&cluster->priv->data_center_href, g_free);
++    g_clear_pointer(&cluster->priv->data_center_id, g_free);
++    g_clear_object(&cluster->priv->hosts);
++
++    G_OBJECT_CLASS(ovirt_cluster_parent_class)->dispose(obj);
++}
++
++
++static gboolean ovirt_cluster_init_from_xml(OvirtResource *resource,
++                                            RestXmlNode *node,
++                                            GError **error)
++{
++    OvirtResourceClass *parent_class;
++    OvirtXmlElement cluster_elements[] = {
++        { .prop_name = "data-center-href",
++          .type = G_TYPE_STRING,
++          .xml_path = "data_center",
++          .xml_attr = "href",
++        },
++        { .prop_name = "data-center-id",
++          .type = G_TYPE_STRING,
++          .xml_path = "data_center",
++          .xml_attr = "id",
++        },
++        { NULL , },
++    };
++
++    if (!ovirt_rest_xml_node_parse(node, G_OBJECT(resource), cluster_elements))
++        return FALSE;
++
++    parent_class = OVIRT_RESOURCE_CLASS(ovirt_cluster_parent_class);
++    return parent_class->init_from_xml(resource, node, error);
++}
++
++
++static void ovirt_cluster_class_init(OvirtClusterClass *klass)
++{
++    GObjectClass *object_class = G_OBJECT_CLASS(klass);
++    OvirtResourceClass *resource_class = OVIRT_RESOURCE_CLASS(klass);
++    GParamSpec *param_spec;
++
++    g_type_class_add_private(klass, sizeof(OvirtClusterPrivate));
++
++    resource_class->init_from_xml = ovirt_cluster_init_from_xml;
++    object_class->dispose = ovirt_cluster_dispose;
++    object_class->get_property = ovirt_cluster_get_property;
++    object_class->set_property = ovirt_cluster_set_property;
++
++    param_spec = g_param_spec_string("data-center-href",
++                                     "Data Center href",
++                                     "Data Center href for the Cluster",
++                                     NULL,
++                                     G_PARAM_READWRITE |
++                                     G_PARAM_STATIC_STRINGS);
++    g_object_class_install_property(object_class,
++                                    PROP_DATA_CENTER_HREF,
++                                    param_spec);
++
++    param_spec = g_param_spec_string("data-center-id",
++                                     "Data Center Id",
++                                     "Data Center Id for the Cluster",
++                                     NULL,
++                                     G_PARAM_READWRITE |
++                                     G_PARAM_STATIC_STRINGS);
++    g_object_class_install_property(object_class,
++                                    PROP_DATA_CENTER_ID,
++                                    param_spec);
++}
++
++static void ovirt_cluster_init(OvirtCluster *cluster)
++{
++    cluster->priv = OVIRT_CLUSTER_GET_PRIVATE(cluster);
++}
++
++G_GNUC_INTERNAL
++OvirtCluster *ovirt_cluster_new_from_id(const char *id,
++                                        const char *href)
++{
++    OvirtResource *cluster = ovirt_resource_new_from_id(OVIRT_TYPE_CLUSTER, id, href);
++    return OVIRT_CLUSTER(cluster);
++}
++
++G_GNUC_INTERNAL
++OvirtCluster *ovirt_cluster_new_from_xml(RestXmlNode *node,
++                                         GError **error)
++{
++    OvirtResource *cluster = ovirt_resource_new_from_xml(OVIRT_TYPE_CLUSTER, node, error);
++    return OVIRT_CLUSTER(cluster);
++}
++
++OvirtCluster *ovirt_cluster_new(void)
++{
++    OvirtResource *cluster = ovirt_resource_new(OVIRT_TYPE_CLUSTER);
++    return OVIRT_CLUSTER(cluster);
++}
++
++/**
++ * ovirt_cluster_get_hosts:
++ * @cluster: a #OvirtCluster
++ *
++ * Gets a #OvirtCollection representing the list of remote hosts from a
++ * cluster object. This method does not initiate any network
++ * activity, the remote host list must be then be fetched using
++ * ovirt_collection_fetch() or ovirt_collection_fetch_async().
++ *
++ * Return value: (transfer none): a #OvirtCollection representing the list
++ * of hosts associated with @cluster.
++ */
++OvirtCollection *ovirt_cluster_get_hosts(OvirtCluster *cluster)
++{
++    g_return_val_if_fail(OVIRT_IS_CLUSTER(cluster), NULL);
++
++    if (cluster->priv->hosts == NULL) {
++        OvirtCollection *collection;
++        collection = ovirt_sub_collection_new_from_resource(OVIRT_RESOURCE(cluster),
++                                                            "hosts",
++                                                            "hosts",
++                                                            OVIRT_TYPE_HOST,
++                                                            "host");
++        cluster->priv->hosts = collection;
++    }
++
++    return cluster->priv->hosts;
++}
++
+diff --git a/govirt/ovirt-cluster.h b/govirt/ovirt-cluster.h
+new file mode 100644
+index 0000000..9505e8c
+--- /dev/null
++++ b/govirt/ovirt-cluster.h
+@@ -0,0 +1,66 @@
++/*
++ * ovirt-cluster.h: oVirt cluster resource
++ *
++ * Copyright (C) 2017 Red Hat, Inc.
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this library. If not, see
++ * <http://www.gnu.org/licenses/>.
++ *
++ * Author: Eduardo Lima (Etrunko) <etrunko@redhat.com>
++ */
++#ifndef __OVIRT_CLUSTER_H__
++#define __OVIRT_CLUSTER_H__
++
++#include <gio/gio.h>
++#include <glib-object.h>
++#include <govirt/ovirt-collection.h>
++#include <govirt/ovirt-resource.h>
++#include <govirt/ovirt-types.h>
++
++G_BEGIN_DECLS
++
++#define OVIRT_TYPE_CLUSTER            (ovirt_cluster_get_type ())
++#define OVIRT_CLUSTER(obj)            (G_TYPE_CHECK_INSTANCE_CAST ((obj), OVIRT_TYPE_CLUSTER, OvirtCluster))
++#define OVIRT_CLUSTER_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST ((klass), OVIRT_TYPE_CLUSTER, OvirtClusterClass))
++#define OVIRT_IS_CLUSTER(obj)         (G_TYPE_CHECK_INSTANCE_TYPE ((obj), OVIRT_TYPE_CLUSTER))
++#define OVIRT_IS_CLUSTER_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE ((klass), OVIRT_TYPE_CLUSTER))
++#define OVIRT_CLUSTER_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj), OVIRT_TYPE_CLUSTER, OvirtClusterClass))
++
++typedef struct _OvirtClusterPrivate OvirtClusterPrivate;
++typedef struct _OvirtClusterClass OvirtClusterClass;
++
++struct _OvirtCluster
++{
++    OvirtResource parent;
++
++    OvirtClusterPrivate *priv;
++
++    /* Do not add fields to this struct */
++};
++
++struct _OvirtClusterClass
++{
++    OvirtResourceClass parent_class;
++
++    gpointer padding[20];
++};
++
++GType ovirt_cluster_get_type(void);
++
++OvirtCluster *ovirt_cluster_new(void);
++OvirtCollection *ovirt_cluster_get_hosts(OvirtCluster *cluster);
++
++G_END_DECLS
++
++#endif /* __OVIRT_CLUSTER_H__ */
+diff --git a/govirt/ovirt-types.h b/govirt/ovirt-types.h
+index 42fc004..e2f196e 100644
+--- a/govirt/ovirt-types.h
++++ b/govirt/ovirt-types.h
+@@ -27,6 +27,7 @@ G_BEGIN_DECLS
+ 
+ typedef struct _OvirtApi OvirtApi;
+ typedef struct _OvirtCdrom OvirtCdrom;
++typedef struct _OvirtCluster OvirtCluster;
+ typedef struct _OvirtCollection OvirtCollection;
+ typedef struct _OvirtHost OvirtHost;
+ typedef struct _OvirtProxy OvirtProxy;

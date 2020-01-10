@@ -1,0 +1,94 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: "Eduardo Lima (Etrunko)" <etrunko@redhat.com>
+Date: Thu, 13 Jul 2017 17:49:36 -0300
+Subject: [PATCH] cluster: Introduce ovirt_cluster_get_data_center()
+
+This function can be used to retrieve the data center associated with
+the cluster.
+
+Signed-off-by: Eduardo Lima (Etrunko) <etrunko@redhat.com>
+---
+ govirt/govirt.sym      |  1 +
+ govirt/ovirt-cluster.c | 33 ++++++++++++++++++++++++++++++++-
+ govirt/ovirt-cluster.h |  1 +
+ 3 files changed, 34 insertions(+), 1 deletion(-)
+
+diff --git a/govirt/govirt.sym b/govirt/govirt.sym
+index 243ce0b..9806033 100644
+--- a/govirt/govirt.sym
++++ b/govirt/govirt.sym
+@@ -121,6 +121,7 @@ GOVIRT_0.3.2 {
+         ovirt_api_search_vms;
+         ovirt_api_search_vm_pools;
+ 
++        ovirt_cluster_get_data_center;
+         ovirt_cluster_get_type;
+         ovirt_cluster_get_hosts;
+         ovirt_cluster_new;
+diff --git a/govirt/ovirt-cluster.c b/govirt/ovirt-cluster.c
+index 83b0fa1..4aaf6b1 100644
+--- a/govirt/ovirt-cluster.c
++++ b/govirt/ovirt-cluster.c
+@@ -42,6 +42,18 @@ enum {
+     PROP_DATA_CENTER_ID,
+ };
+ 
++static const char *get_data_center_href(OvirtCluster *cluster)
++{
++    if (cluster->priv->data_center_href == NULL &&
++        cluster->priv->data_center_id != NULL) {
++        cluster->priv->data_center_href = g_strdup_printf("%s/%s",
++                                                          "/ovirt-engine/api/data_centers",
++                                                          cluster->priv->data_center_id);
++    }
++
++    return cluster->priv->data_center_href;
++}
++
+ static void ovirt_cluster_get_property(GObject *object,
+                                        guint prop_id,
+                                        GValue *value,
+@@ -51,7 +63,7 @@ static void ovirt_cluster_get_property(GObject *object,
+ 
+     switch (prop_id) {
+     case PROP_DATA_CENTER_HREF:
+-        g_value_set_string(value, cluster->priv->data_center_href);
++        g_value_set_string(value, get_data_center_href(cluster));
+         break;
+     case PROP_DATA_CENTER_ID:
+         g_value_set_string(value, cluster->priv->data_center_id);
+@@ -213,3 +225,22 @@ OvirtCollection *ovirt_cluster_get_hosts(OvirtCluster *cluster)
+     return cluster->priv->hosts;
+ }
+ 
++
++/**
++ * ovirt_cluster_get_data_center:
++ * @cluster: a #OvirtCluster
++ *
++ * Gets a #OvirtCluster representing the data center the cluster belongs
++ * to. This method does not initiate any network activity, the remote data center must
++ * be then be fetched using ovirt_resource_refresh() or
++ * ovirt_resource_refresh_async().
++ *
++ * Return value: (transfer full): a #OvirtDataCenter representing data center
++ * the @host belongs to.
++ */
++OvirtDataCenter *ovirt_cluster_get_data_center(OvirtCluster *cluster)
++{
++    g_return_val_if_fail(OVIRT_IS_CLUSTER(cluster), NULL);
++    g_return_val_if_fail(cluster->priv->data_center_id != NULL, NULL);
++    return ovirt_data_center_new_from_id(cluster->priv->data_center_id, get_data_center_href(cluster));
++}
+diff --git a/govirt/ovirt-cluster.h b/govirt/ovirt-cluster.h
+index 9505e8c..cdd54b7 100644
+--- a/govirt/ovirt-cluster.h
++++ b/govirt/ovirt-cluster.h
+@@ -60,6 +60,7 @@ GType ovirt_cluster_get_type(void);
+ 
+ OvirtCluster *ovirt_cluster_new(void);
+ OvirtCollection *ovirt_cluster_get_hosts(OvirtCluster *cluster);
++OvirtDataCenter *ovirt_cluster_get_data_center(OvirtCluster *cluster);
+ 
+ G_END_DECLS
+ 
