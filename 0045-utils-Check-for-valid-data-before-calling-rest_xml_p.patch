@@ -1,0 +1,98 @@
+From d6ddeff795ce3f132f1e266fc813e0a4917f8bf7 Mon Sep 17 00:00:00 2001
+From: "Eduardo Lima (Etrunko)" <etrunko@redhat.com>
+Date: Mon, 4 Feb 2019 15:58:40 -0200
+Subject: [PATCH] utils: Check for valid data before calling
+ rest_xml_parser_parse_from_data()
+
+In the case of HTTP errors, such as a invalid TLS certificate, the
+returned data is NULL, and the code in librest does not check for the
+pointer being valid, causing a segfault.
+
+The users of this function have been updated to check for NULL return
+value.
+
+Signed-off-by: Eduardo Lima (Etrunko) <etrunko@redhat.com>
+---
+ govirt/ovirt-proxy.c    | 6 ++++++
+ govirt/ovirt-resource.c | 9 ++++++++-
+ govirt/ovirt-utils.c    | 7 +++++--
+ 3 files changed, 19 insertions(+), 3 deletions(-)
+
+diff --git a/govirt/ovirt-proxy.c b/govirt/ovirt-proxy.c
+index 920ef21..9cdd211 100644
+--- a/govirt/ovirt-proxy.c
++++ b/govirt/ovirt-proxy.c
+@@ -365,6 +365,11 @@ static gboolean get_collection_xml_async_cb(OvirtProxy* proxy,
+     data = (OvirtProxyGetCollectionAsyncData *)user_data;
+ 
+     root = ovirt_rest_xml_node_from_call(call);
++    if (root == NULL) {
++        g_set_error_literal(error, OVIRT_ERROR, OVIRT_ERROR_PARSING_FAILED,
++                            _("Failed to parse response from collection"));
++        goto end;
++    }
+ 
+     /* Do the parsing */
+     g_warn_if_fail(data->parser != NULL);
+@@ -374,6 +379,7 @@ static gboolean get_collection_xml_async_cb(OvirtProxy* proxy,
+ 
+     rest_xml_node_unref(root);
+ 
++end:
+     return parsed;
+ }
+ 
+diff --git a/govirt/ovirt-resource.c b/govirt/ovirt-resource.c
+index 1984b1d..936e912 100644
+--- a/govirt/ovirt-resource.c
++++ b/govirt/ovirt-resource.c
+@@ -868,17 +868,24 @@ static gboolean ovirt_resource_refresh_async_cb(OvirtProxy *proxy,
+ {
+     OvirtResource *resource;
+     RestXmlNode *root;
+-    gboolean refreshed;
++    gboolean refreshed = FALSE;
+ 
+     g_return_val_if_fail(REST_IS_PROXY_CALL(call), FALSE);
+     g_return_val_if_fail(OVIRT_IS_RESOURCE(user_data), FALSE);
+ 
+     root = ovirt_rest_xml_node_from_call(call);
++    if (root == NULL) {
++        g_set_error_literal(error, OVIRT_ERROR, OVIRT_ERROR_PARSING_FAILED,
++                            _("Failed to parse response from resource"));
++        goto end;
++    }
++
+     resource = OVIRT_RESOURCE(user_data);
+     refreshed = ovirt_resource_init_from_xml(resource, root, error);
+ 
+     rest_xml_node_unref(root);
+ 
++end:
+     return refreshed;
+ }
+ 
+diff --git a/govirt/ovirt-utils.c b/govirt/ovirt-utils.c
+index dfaf09d..56ce2e1 100644
+--- a/govirt/ovirt-utils.c
++++ b/govirt/ovirt-utils.c
+@@ -40,11 +40,14 @@ ovirt_rest_xml_node_from_call(RestProxyCall *call)
+ {
+     RestXmlParser *parser;
+     RestXmlNode *node;
++    const char * data = rest_proxy_call_get_payload (call);
++
++    if (data == NULL)
++        return NULL;
+ 
+     parser = rest_xml_parser_new ();
+ 
+-    node = rest_xml_parser_parse_from_data (parser,
+-            rest_proxy_call_get_payload (call),
++    node = rest_xml_parser_parse_from_data (parser, data,
+             rest_proxy_call_get_payload_length (call));
+ 
+     g_object_unref(G_OBJECT(parser));
+-- 
+2.20.1
+

@@ -1,0 +1,29 @@
+From 5a41846ba6e0d88a0a641caa214703336e2b2820 Mon Sep 17 00:00:00 2001
+From: "Eduardo Lima (Etrunko)" <etrunko@redhat.com>
+Date: Mon, 18 Sep 2017 10:47:13 -0300
+Subject: [PATCH] utils: Improve log message when subnode is not found
+
+Signed-off-by: Eduardo Lima (Etrunko) <etrunko@redhat.com>
+---
+ govirt/ovirt-utils.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/govirt/ovirt-utils.c b/govirt/ovirt-utils.c
+index af1dfc6..a60c754 100644
+--- a/govirt/ovirt-utils.c
++++ b/govirt/ovirt-utils.c
+@@ -63,9 +63,10 @@ ovirt_rest_xml_node_find(RestXmlNode *node, const char *path)
+     pathv = g_strsplit(path, "/", -1);
+ 
+     for (i = 0; i < g_strv_length(pathv); ++i) {
++        gchar *name = node->name;
+         node = rest_xml_node_find(node, pathv[i]);
+         if (node == NULL) {
+-            g_debug("could not find XML node '%s'", pathv[i]);
++            g_debug("could not find subnode '%s' of XML node '%s' (search: %s)", pathv[i], name, path);
+             break;
+         }
+     }
+-- 
+2.14.4
+

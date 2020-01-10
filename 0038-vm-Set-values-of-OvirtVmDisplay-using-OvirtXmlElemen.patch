@@ -1,0 +1,190 @@
+From b8b0d03e43bee40ad15fa4c3aa6ca8b07ca98e31 Mon Sep 17 00:00:00 2001
+From: "Eduardo Lima (Etrunko)" <etrunko@redhat.com>
+Date: Wed, 10 May 2017 15:48:09 -0300
+Subject: [PATCH] vm: Set values of OvirtVmDisplay using OvirtXmlElement struct
+
+This required the addition of OVIRT_VM_DISPLAY_INVALID to the
+OvirtVmDisplayType enum as the default value.
+
+The value of the 'type' property of OvirtVmDisplay is tested after the
+parsing is done, to ensure it is either vnc or spice.
+
+Signed-off-by: Eduardo Lima (Etrunko) <etrunko@redhat.com>
+---
+ govirt/ovirt-vm-display.c |   2 +-
+ govirt/ovirt-vm-display.h |   3 +-
+ govirt/ovirt-vm-xml.c     | 118 ++++++++++++++--------------------------------
+ 3 files changed, 38 insertions(+), 85 deletions(-)
+
+diff --git a/govirt/ovirt-vm-display.c b/govirt/ovirt-vm-display.c
+index 37e042a..b03c303 100644
+--- a/govirt/ovirt-vm-display.c
++++ b/govirt/ovirt-vm-display.c
+@@ -197,7 +197,7 @@ static void ovirt_vm_display_class_init(OvirtVmDisplayClass *klass)
+                                                         "Type",
+                                                         "Display Type",
+                                                         OVIRT_TYPE_VM_DISPLAY_TYPE,
+-                                                        OVIRT_VM_DISPLAY_SPICE,
++                                                        OVIRT_VM_DISPLAY_INVALID,
+                                                         G_PARAM_READWRITE |
+                                                         G_PARAM_STATIC_STRINGS));
+     g_object_class_install_property(object_class,
+diff --git a/govirt/ovirt-vm-display.h b/govirt/ovirt-vm-display.h
+index f7eb310..38ef9b7 100644
+--- a/govirt/ovirt-vm-display.h
++++ b/govirt/ovirt-vm-display.h
+@@ -55,7 +55,8 @@ struct _OvirtVmDisplayClass
+ 
+ typedef enum {
+     OVIRT_VM_DISPLAY_SPICE,
+-    OVIRT_VM_DISPLAY_VNC
++    OVIRT_VM_DISPLAY_VNC,
++    OVIRT_VM_DISPLAY_INVALID,
+ } OvirtVmDisplayType;
+ 
+ GType ovirt_vm_display_get_type(void);
+diff --git a/govirt/ovirt-vm-xml.c b/govirt/ovirt-vm-xml.c
+index 25f50f3..0603427 100644
+--- a/govirt/ovirt-vm-xml.c
++++ b/govirt/ovirt-vm-xml.c
+@@ -33,102 +33,54 @@
+ static gboolean vm_set_display_from_xml(OvirtVm *vm,
+                                         RestXmlNode *root)
+ {
+-    RestXmlNode *node;
+     OvirtVmDisplay *display;
+-    const char *display_key = g_intern_string("display");
+-    const char *type_key = g_intern_string("type");
+-    const char *address_key = g_intern_string("address");
+-    const char *port_key = g_intern_string("port");
+-    const char *secure_port_key = g_intern_string("secure_port");
+-    const char *monitors_key = g_intern_string("monitors");
+-    const char *certificate_key = g_intern_string("certificate");
+-    const char *smartcard_key = g_intern_string("smartcard_enabled");
+-    const char *allow_override_key = g_intern_string("allow_override");
+-    const char *proxy_key = g_intern_string("proxy");
++    OvirtVmDisplayType type;
++    OvirtXmlElement display_elements[] = {
++        { .prop_name = "type",
++          .xml_path = "type",
++        },
++        { .prop_name = "address",
++          .xml_path = "address",
++        },
++        { .prop_name = "port",
++          .xml_path = "port",
++        },
++        { .prop_name = "secure-port",
++          .xml_path = "secure_port",
++        },
++        { .prop_name = "monitor-count",
++          .xml_path = "monitors",
++        },
++        { .prop_name = "smartcard",
++          .xml_path = "smartcard_enabled",
++        },
++        { .prop_name = "allow-override",
++          .xml_path = "allow_override",
++        },
++        { .prop_name = "host-subject",
++          .xml_path = "certificate/subject",
++        },
++        { .prop_name = "proxy-url",
++          .xml_path = "proxy",
++        },
++        { NULL, },
++    };
+ 
+     if (root == NULL) {
+         return FALSE;
+     }
+-    root = g_hash_table_lookup(root->children, display_key);
++    root = rest_xml_node_find(root, "display");
+     if (root == NULL) {
+         g_debug("Could not find 'display' node");
+         return FALSE;
+     }
+     display = ovirt_vm_display_new();
+-
+-    node = g_hash_table_lookup(root->children, type_key);
+-    g_return_val_if_fail(node != NULL, FALSE);
+-    if (g_strcmp0(node->content, "spice") == 0) {
+-        g_object_set(G_OBJECT(display), "type", OVIRT_VM_DISPLAY_SPICE, NULL);
+-    } else if (g_strcmp0(node->content, "vnc") == 0) {
+-        g_object_set(G_OBJECT(display), "type", OVIRT_VM_DISPLAY_VNC, NULL);
+-    } else {
+-        g_warning("Unknown display type: %s", node->content);
++    ovirt_rest_xml_node_parse(root, G_OBJECT(display), display_elements);
++    g_object_get(G_OBJECT(display), "type", &type, NULL);
++    if (type == OVIRT_VM_DISPLAY_INVALID) {
+         return FALSE;
+     }
+ 
+-    node = g_hash_table_lookup(root->children, monitors_key);
+-    g_return_val_if_fail(node != NULL, FALSE);
+-    g_object_set(G_OBJECT(display),
+-                 "monitor-count", strtoul(node->content, NULL, 0),
+-                 NULL);
+-
+-    /* on non started VMs, these 2 values will not be available */
+-    node = g_hash_table_lookup(root->children, address_key);
+-    if (node != NULL) {
+-        g_object_set(G_OBJECT(display), "address", node->content, NULL);
+-    }
+-
+-    node = g_hash_table_lookup(root->children, port_key);
+-    if (node != NULL) {
+-        g_object_set(G_OBJECT(display),
+-                     "port", strtoul(node->content, NULL, 0),
+-                     NULL);
+-    }
+-
+-    node = g_hash_table_lookup(root->children, secure_port_key);
+-    if (node != NULL) {
+-        g_object_set(G_OBJECT(display),
+-                     "secure-port", strtoul(node->content, NULL, 0),
+-                     NULL);
+-    }
+-
+-    node = g_hash_table_lookup(root->children, smartcard_key);
+-    if (node != NULL) {
+-        gboolean smartcard;
+-
+-        smartcard = (g_strcmp0(node->content, "true") == 0);
+-        g_object_set(G_OBJECT(display),
+-                     "smartcard", smartcard,
+-                     NULL);
+-    }
+-
+-    node = g_hash_table_lookup(root->children, allow_override_key);
+-    if (node != NULL) {
+-        gboolean allow_override;
+-
+-        allow_override = (g_strcmp0(node->content, "true") == 0);
+-        g_object_set(G_OBJECT(display),
+-                     "allow-override", allow_override,
+-                     NULL);
+-    }
+-
+-    node = g_hash_table_lookup(root->children, certificate_key);
+-    if (node != NULL) {
+-        const char *subject_key = g_intern_string("subject");
+-        node = g_hash_table_lookup(node->children, subject_key);
+-        if (node != NULL) {
+-            g_object_set(G_OBJECT(display),
+-                         "host-subject", node->content,
+-                         NULL);
+-        }
+-    }
+-
+-    node = g_hash_table_lookup(root->children, proxy_key);
+-    if (node != NULL) {
+-        g_object_set(G_OBJECT(display), "proxy-url", node->content, NULL);
+-    }
+-
+     /* FIXME: this overrides the ticket/expiry which may
+      * already be set
+      */
+-- 
+2.14.4
+

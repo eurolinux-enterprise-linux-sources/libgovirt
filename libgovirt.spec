@@ -17,7 +17,7 @@
 Summary: A GObject library for interacting with oVirt REST API
 Name: libgovirt
 Version: 0.3.4
-Release: 1%{?dist}%{?extra_release}
+Release: 3%{?dist}%{?extra_release}
 License: LGPLv2+
 Group: Development/Libraries
 Source: http://ftp.gnome.org/pub/GNOME/sources/libgovirt/0.3/%{name}-%{version}.tar.xz
@@ -54,6 +54,20 @@ Patch29: 0029-resource-Fix-ovirt_resource_rest_call_sync-crash-on-.patch
 Patch30: 0030-resource-Fix-ovirt_resource_init_from_xml_real-preco.patch
 Patch31: 0031-resource-Update-xml-node-in-ovirt_resource_init_from.patch
 Patch32: 0032-utils-Drop-type-member-from-OvirtXmlElement-struct.patch
+Patch33: 0033-utils-Support-G_TYPE_UINT-in-_set_property_value_fro.patch
+Patch34: 0034-utils-Improve-log-message-when-subnode-is-not-found.patch
+Patch35: 0035-utils-Factor-out-basic-value-type-setting-from-_set_.patch
+Patch36: 0036-utils-Get-enum-default-value-from-GParamSpec.patch
+Patch37: 0037-vm-Set-vm-state-property-using-OvirtXmlElement-struc.patch
+Patch38: 0038-vm-Set-values-of-OvirtVmDisplay-using-OvirtXmlElemen.patch
+Patch39: 0039-vm-display-Move-XML-parsing-from-ovirt-vm-xml.c-file.patch
+Patch40: 0040-vm-Set-ticket-expiry-using-OvirtXmlElement-struct.patch
+Patch41: 0041-test-govirt-Add-display-node-to-vm-XMLs.patch
+Patch42: 0042-proxy-Set-detailed-error-message-for-async-call.patch
+Patch43: 0043-cdrom-Set-file-property-using-OvirtXmlElement-struct.patch
+Patch44: 0044-proxy-Don-t-try-to-unref-NULL-root-node.patch
+Patch45: 0045-utils-Check-for-valid-data-before-calling-rest_xml_p.patch
+Patch46: 0046-Update-tests-certificates.patch
 
 %if 0%{?enable_autotools}
 BuildRequires: autoconf
@@ -139,6 +153,12 @@ make check
 %endif
 
 %changelog
+* Tue Apr 09 2019 Eduardo Lima (Etrunko) <etrunko@redhat.com> - 0.3.4-2
+- Parse XML nodes automatically
+  Related: rhbz#1427467
+- Set detailed error message for async call
+  Related: rhbz#1427467
+
 * Fri Jun 08 2018 Christophe Fergeau <cfergeau@redhat.com> - 0.3.4-1
 - Rebase to latest 0.3.4 upstream release. Still quite a few patches as
   there was no 0.3.5 release yet

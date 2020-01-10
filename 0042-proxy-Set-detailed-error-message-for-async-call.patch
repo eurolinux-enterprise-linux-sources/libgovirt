@@ -1,0 +1,66 @@
+From 01563a00550dd001f080aeddd8c6bbc35c676991 Mon Sep 17 00:00:00 2001
+From: "Eduardo Lima (Etrunko)" <etrunko@redhat.com>
+Date: Wed, 11 Jul 2018 15:42:16 -0300
+Subject: [PATCH] proxy: Set detailed error message for async call
+
+The rest API returns more detailed error messages with the result, not
+only the literal corresponding to the value. If this is the case, we set
+a new error message and return it.
+
+For example, before this change, virt-viewer showed a dialog with a
+vague 'Bad Request' message, and now a much more detailed 'Operation
+Failed: query execution failed due to insufficient permissions.'
+
+Signed-off-by: Eduardo Lima (Etrunko) <etrunko@redhat.com>
+---
+ govirt/ovirt-proxy.c | 20 ++++++++++++++++++--
+ 1 file changed, 18 insertions(+), 2 deletions(-)
+
+diff --git a/govirt/ovirt-proxy.c b/govirt/ovirt-proxy.c
+index 921e22e..f8e629e 100644
+--- a/govirt/ovirt-proxy.c
++++ b/govirt/ovirt-proxy.c
+@@ -240,6 +240,22 @@ call_async_cancelled_cb (G_GNUC_UNUSED GCancellable *cancellable,
+ }
+ 
+ 
++static void rest_call_async_set_error(RestProxyCall *call, GSimpleAsyncResult *result, const GError *error)
++{
++    GError *local_error = NULL;
++    RestXmlNode *root = ovirt_rest_xml_node_from_call(call);
++
++    if (root != NULL && ovirt_utils_gerror_from_xml_fault(root, &local_error)) {
++        g_debug("ovirt_rest_call_async(): %s", local_error->message);
++        g_simple_async_result_set_from_error(result, local_error);
++        g_clear_error(&local_error);
++    } else {
++        g_simple_async_result_set_from_error(result, error);
++    }
++
++    rest_xml_node_unref(root);
++}
++
+ static void
+ call_async_cb(RestProxyCall *call, const GError *error,
+               G_GNUC_UNUSED GObject *weak_object,
+@@ -249,7 +265,7 @@ call_async_cb(RestProxyCall *call, const GError *error,
+     GSimpleAsyncResult *result = data->result;
+ 
+     if (error != NULL) {
+-        g_simple_async_result_set_from_error(result, error);
++        rest_call_async_set_error(call, result, error);
+     } else {
+         GError *call_error = NULL;
+         gboolean callback_result = TRUE;
+@@ -259,7 +275,7 @@ call_async_cb(RestProxyCall *call, const GError *error,
+                                                   data->call_user_data,
+                                                   &call_error);
+             if (call_error != NULL) {
+-                g_simple_async_result_set_from_error(result, call_error);
++                rest_call_async_set_error(call, result, call_error);
+             }
+         }
+ 
+-- 
+2.20.1
+

@@ -1,0 +1,31 @@
+From 8032575cbe274c9e70ec2a0efb0b536f13dbc6cd Mon Sep 17 00:00:00 2001
+From: Christophe Fergeau <cfergeau@redhat.com>
+Date: Fri, 21 Dec 2018 13:15:16 +0100
+Subject: [PATCH] proxy: Don't try to unref NULL root node
+
+When an error occurs, we may have failed to get any data, so 'root' may
+be NULL. Trying to unref it triggers a critical. This happens for
+example when trying to connect to a remote host with an invalid
+certificate.
+---
+ govirt/ovirt-proxy.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/govirt/ovirt-proxy.c b/govirt/ovirt-proxy.c
+index f8e629e..920ef21 100644
+--- a/govirt/ovirt-proxy.c
++++ b/govirt/ovirt-proxy.c
+@@ -253,7 +253,9 @@ static void rest_call_async_set_error(RestProxyCall *call, GSimpleAsyncResult *r
+         g_simple_async_result_set_from_error(result, error);
+     }
+ 
+-    rest_xml_node_unref(root);
++    if (root != NULL) {
++        rest_xml_node_unref(root);
++    }
+ }
+ 
+ static void
+-- 
+2.20.1
+

@@ -1,0 +1,39 @@
+From a2abf332bf99baf1d6b6a96d9153b44efdedf384 Mon Sep 17 00:00:00 2001
+From: "Eduardo Lima (Etrunko)" <etrunko@redhat.com>
+Date: Fri, 22 Jun 2018 18:18:53 -0300
+Subject: [PATCH] test-govirt: Add 'display' node to vm XMLs
+
+Makes 'make distcheck' pass again. Test-govirt was failing since commit
+039c8d8, because the 'display' node is mandatory, but the return value
+of the function vm_set_display_from_xml() had been ignored.
+
+Signed-off-by: Eduardo Lima (Etrunko) <etrunko@redhat.com>
+---
+ tests/test-govirt.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/tests/test-govirt.c b/tests/test-govirt.c
+index 247a27a..7f2cd57 100644
+--- a/tests/test-govirt.c
++++ b/tests/test-govirt.c
+@@ -194,9 +194,17 @@ static void test_govirt_list_duplicate_vms(void)
+     const char *vms_body = "<vms> \
+                               <vm href=\"api/vms/uuid0\" id=\"uuid0\"> \
+                                 <name>vm0</name> \
++                                <display> \
++                                    <type>spice</type> \
++                                    <monitors>1</monitors> \
++                                </display> \
+                               </vm> \
+                               <vm href=\"api/vms/uuid1\" id=\"uuid1\"> \
+                                 <name>vm0</name> \
++                                <display> \
++                                    <type>spice</type> \
++                                    <monitors>1</monitors> \
++                                </display> \
+                               </vm> \
+                             </vms>";
+ 
+-- 
+2.14.4
+
