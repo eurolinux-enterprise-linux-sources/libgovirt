@@ -1,0 +1,52 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Christophe Fergeau <cfergeau@redhat.com>
+Date: Tue, 14 Jun 2016 14:38:07 +0200
+Subject: [PATCH] proxy: Fix persistent session with oVirt 3.6
+
+commit d3683c2 "proxy: Only set 'Prefer: persistent-auth' with
+jsession-id"  was working as expected when using the
+OvirtProxy::jsession-id and OvirtProxy::sso-token properties.
+
+However, when not using these properties and expecting the jsessionid to
+be set as a cookie during a regular HTTP session, this was not working
+properly as oVirt is not sending a jsessionid cookie when Prefer:
+persistent-auth is not set.
+
+Consequently, we need to set it upon OvirtProxy creation in order not to
+break this usecase. We don't add the header in RestProxyCall as was done
+before as we want to be able to disable this addition after
+OvirtProxy::sso-token has been set.
+---
+ govirt/ovirt-proxy.c | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/govirt/ovirt-proxy.c b/govirt/ovirt-proxy.c
+index f0ff85e..eee0997 100644
+--- a/govirt/ovirt-proxy.c
++++ b/govirt/ovirt-proxy.c
+@@ -732,9 +732,6 @@ static void ovirt_proxy_set_session_id(OvirtProxy *proxy, const char *session_id
+         cookie = soup_cookie_new("JSESSIONID", session_id, domain, "/ovirt-engine/api", -1);
+         soup_cookie_jar_add_cookie(proxy->priv->cookie_jar, cookie);
+         proxy->priv->jsessionid_cookie = cookie;
+-        ovirt_proxy_add_header(proxy, "Prefer", "persistent-auth");
+-    } else {
+-        ovirt_proxy_add_header(proxy, "Prefer", NULL);
+     }
+     g_free(url);
+ }
+@@ -746,6 +743,7 @@ static void ovirt_proxy_set_sso_token(OvirtProxy *proxy, const char *sso_token)
+     g_free(proxy->priv->sso_token);
+     proxy->priv->sso_token = g_strdup(sso_token);
+ 
++    ovirt_proxy_add_header(proxy, "Prefer", NULL);
+     header_value = g_strdup_printf("Bearer %s", sso_token);
+     ovirt_proxy_add_header(proxy, "Authorization", header_value);
+     g_free(header_value);
+@@ -829,6 +827,7 @@ static void ovirt_proxy_constructed(GObject *gobject)
+         g_warning("Disabling strict checking of SSL certificates");
+         g_object_set(OVIRT_PROXY(gobject), "ssl-strict", FALSE, NULL);
+     }
++    ovirt_proxy_add_header(OVIRT_PROXY(gobject), "Prefer", "persistent-auth");
+ 
+     /* Chain up to the parent class */
+     if (G_OBJECT_CLASS(ovirt_proxy_parent_class)->constructed)

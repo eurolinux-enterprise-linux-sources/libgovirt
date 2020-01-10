@@ -1,0 +1,44 @@
+From 651ae276aa769dc9d987cca4c14c6c3a542476c9 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Fabiano=20Fid=C3=AAncio?= <fidencio@redhat.com>
+Date: Thu, 22 Oct 2015 14:40:37 +0200
+Subject: [PATCH] collection: unref the resource instead of the resources table
+
+The typo was causing crashes, see the gdb backtrace:
+
+ #0  g_type_check_instance_is_fundamentally_a (
+     type_instance=type_instance@entry=0x519b9e0,
+     fundamental_type=fundamental_type@entry=80) at ../../gobject/gtype.c:3981
+ #1  0x63c4a47b in g_object_unref (_object=0x519b9e0)
+     at ../../gobject/gobject.c:3067
+ #2  0x64842fb0 in ovirt_collection_refresh_from_xml (collection=0x50d4450,
+     root_node=<optimized out>, error=0x28fb8c)
+     at ../../govirt/ovirt-collection.c:276
+ #3  0x64843c49 in get_collection_xml_async_cb (proxy=0x3aebfd0,
+     call=0x50d28a0, user_data=0x29c2ce0, error=0x28fb8c)
+     at ../../govirt/ovirt-proxy.c:343
+ #4  0x64843bb2 in call_async_cb (call=0x50d28a0, error=0x0, weak_object=0x0,
+     user_data=0x50d8680) at ../../govirt/ovirt-proxy.c:248
+ #5  0x00023fa7 in ?? ()
+     from C:\Program Files (x86)\VirtViewer v2.0-80\bin\librest-0.7-0.dll
+ #6  0x051600e0 in ?? ()
+
+(cherry picked from commit 7b48a957f733704f7dddd3b682111675e989666c)
+
+Resolves: rhbz#1273977
+---
+ govirt/ovirt-collection.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/govirt/ovirt-collection.c b/govirt/ovirt-collection.c
+index 52829f1..9f15163 100644
+--- a/govirt/ovirt-collection.c
++++ b/govirt/ovirt-collection.c
+@@ -273,7 +273,7 @@ ovirt_collection_refresh_from_xml(OvirtCollection *collection,
+         if (g_hash_table_lookup(resources, name) != NULL) {
+             g_message("'%s' resource with the same name ('%s') already exists",
+                       collection->priv->resource_xml_name, name);
+-            g_object_unref(resources);
++            g_object_unref(G_OBJECT(resource));
+             continue;
+         }
+         g_hash_table_insert(resources, name, resource);

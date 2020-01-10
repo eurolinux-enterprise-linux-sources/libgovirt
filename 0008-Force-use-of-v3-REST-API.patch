@@ -1,0 +1,28 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Christophe Fergeau <cfergeau@redhat.com>
+Date: Thu, 16 Jun 2016 11:10:27 +0200
+Subject: [PATCH] Force use of v3 REST API
+
+oVirt 4.0 introduced a slightly incompatible REST API, see
+https://github.com/oVirt/ovirt-engine/tree/master/backend/manager/modules/restapi
+A short term fix is to send a "Version: 3" header with each request,
+which this commit does. This might stop working with oVirt 4.1 though.
+
+Longer term fix is tracked in
+https://bugzilla.gnome.org/show_bug.cgi?id=767724
+---
+ govirt/ovirt-proxy.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/govirt/ovirt-proxy.c b/govirt/ovirt-proxy.c
+index eee0997..81f3f98 100644
+--- a/govirt/ovirt-proxy.c
++++ b/govirt/ovirt-proxy.c
+@@ -828,6 +828,7 @@ static void ovirt_proxy_constructed(GObject *gobject)
+         g_object_set(OVIRT_PROXY(gobject), "ssl-strict", FALSE, NULL);
+     }
+     ovirt_proxy_add_header(OVIRT_PROXY(gobject), "Prefer", "persistent-auth");
++    ovirt_proxy_add_header(OVIRT_PROXY(gobject), "Version", "3");
+ 
+     /* Chain up to the parent class */
+     if (G_OBJECT_CLASS(ovirt_proxy_parent_class)->constructed)

@@ -1,0 +1,102 @@
+0.3.3 - April 8th 2015
+======================
+
+Changes since 0.3.2:
+
+- Add support for SPICE proxy
+- Don't report REST call cancellations as an unexpected error
+- Access REST API through /ovirt-engine/api rather than /api as the latter is
+  deprecated
+- Parse status of storage domains
+- Add support for GOVIRT_DISABLE_HTTPS and GOVIRT_NO_SSL_STRICT environment
+  variable in order to make it easier to lower security during development/testing
+- Fix compilation with older glibs
+- Fix mingw build
+- Translations:
+    * Basque (Inaki Larranaga Murgoitio)
+    * Bosnian (Samir Ribic)
+    * Brazilian Portuguese (Rafael Ferreira)
+    * Greek (Dimitris Spingos)
+    * Hungarian (Balázs Úr)
+    * Slovenian (Matej Urbančič)
+    * Turkish (Muhammet Kara, Necdet Yücel)
+    * Russian (Yuri Myasoedov)
+
+
+0.3.2 - October 9th 2014
+========================
+
+Changes since 0.3.1:
+
+- Allow empty filenames in OvirtCdrom, this allows to remove the current CD
+  image from a VM
+- Parse leading '~' when handling commandline filenames (Fabiano Fidêncio)
+- Implemented ovirt_resource_delete() and its async variant
+- Add translation support (Fabiano Fidêncio)
+- Translations:
+    * Czech (Marek Černocký)
+    * German (Christian Kirbach)
+    * Indonesian (Andika Triwidada)
+    * Polish (Piotr Drąg)
+    * Serbian (Мирослав Николић)
+    * Slovenian (Matej Urbančič)
+    * Spanish (Daniel Mustieles)
+- Bug fixes
+
+
+0.3.1 - September 3rd 2014
+==========================
+
+Changes since 0.3.0:
+
+- Handle cookies set by the oVirt instance in order to have some
+ 'persistant' authentication through the JSESSIONID cookie
+- Add support for VM pools (Iordan Iordanov)
+- Added ovirt_resource_refresh{_async} in order to refetch a resource content
+  remotely
+- Various leak/memory-handling related bug fixes
+- ovirt_proxy_new now expects a hostname without the https:// and the /api part.
+  hostnames with http/https/api will still work fine but will cause runtime
+  warnings.
+
+
+0.3.0 - October 29, 2013
+========================
+
+Changes since 0.2.0:
+
+- Add support for listing storage domains and the files they contain
+- Add support for changing the CDRom available in a VM
+- Introduced an OvirtApi class which represents the toplevel oVirt
+  collection from which one can access VMs, storage domains, ...
+  This means that various OvirtProxy methods to fetch VMs have been deprecated
+  in favour of using OvirtApi + OvirtCollection methods
+- Rework certificate handling, OvirtProxy now has a 'ssl-ca-file' property
+  that can be used to specify which CA certificate should be used to validate
+  remote certificates.
+- Certificate checking is now enforced by default unless
+  OvirtProxy::ssl-strict is set to FALSE
+- ABI/API hasn't been broken, even though some functions were deprecated
+
+0.2.0 - July 5, 2013
+====================
+
+Changes since 0.1.0:
+
+- Break ABI :(
+- Switch back to using GSimpleAsyncResult (from GTask) to gain
+  compatibility with older glib versions
+- Refactor internals to make it much easier to add support for more
+  REST collections
+- Parse more VM states from the OvirtVm resource
+
+0.1.0 - June 7, 2013
+====================
+
+Changes since 0.0.3:
+
+- Add OvirtVmDisplay::host_subject property, this is required in some cases
+  to connect to a VM which is using SPICE
+- Add OvirtVmDisplay::smartcard and OvirtVmDisplay::allow-override
+  properties
+- Implement ovirt_vm_refresh_async()

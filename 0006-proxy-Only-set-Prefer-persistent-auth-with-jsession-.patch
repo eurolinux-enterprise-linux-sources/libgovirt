@@ -1,0 +1,38 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Christophe Fergeau <cfergeau@redhat.com>
+Date: Mon, 8 Feb 2016 14:51:22 +0100
+Subject: [PATCH] proxy: Only set 'Prefer: persistent-auth' with jsession-id
+
+When using an oauth SSO token, this header should not be set.
+---
+ govirt/ovirt-proxy.c     | 3 +++
+ govirt/ovirt-rest-call.c | 2 --
+ 2 files changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/govirt/ovirt-proxy.c b/govirt/ovirt-proxy.c
+index f289719..f0ff85e 100644
+--- a/govirt/ovirt-proxy.c
++++ b/govirt/ovirt-proxy.c
+@@ -732,6 +732,9 @@ static void ovirt_proxy_set_session_id(OvirtProxy *proxy, const char *session_id
+         cookie = soup_cookie_new("JSESSIONID", session_id, domain, "/ovirt-engine/api", -1);
+         soup_cookie_jar_add_cookie(proxy->priv->cookie_jar, cookie);
+         proxy->priv->jsessionid_cookie = cookie;
++        ovirt_proxy_add_header(proxy, "Prefer", "persistent-auth");
++    } else {
++        ovirt_proxy_add_header(proxy, "Prefer", NULL);
+     }
+     g_free(url);
+ }
+diff --git a/govirt/ovirt-rest-call.c b/govirt/ovirt-rest-call.c
+index 9e1d9c8..cab3240 100644
+--- a/govirt/ovirt-rest-call.c
++++ b/govirt/ovirt-rest-call.c
+@@ -127,8 +127,6 @@ static void ovirt_rest_call_constructed(GObject *object)
+         } else {
+             rest_proxy_call_add_header(REST_PROXY_CALL(object), "Filter", "true");
+         }
+-        rest_proxy_call_add_header(REST_PROXY_CALL(object),
+-                                   "Prefer", "persistent-auth");
+         ovirt_proxy_append_additional_headers(proxy, REST_PROXY_CALL(object));
+ 
+         g_object_unref(proxy);
